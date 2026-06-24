@@ -46,7 +46,7 @@
 | Auth + access control | Supabase Auth + Row-Level Security (RLS) |
 | Scraping | Apify (Google Maps Scraper for MVP) |
 | Crawl | Node/TS crawler (Playwright if JS-heavy) |
-| Enrichment | Regex first → LLM fallback (OpenRouter) → Perplexity for gaps |
+| Enrichment | Regex first → LLM fallback (OpenRouter) → Tavily for gaps |
 | Call orchestration | VAPI |
 | Telephony / numbers | Twilio |
 | Speech-to-text | Deepgram |
@@ -54,10 +54,14 @@
 | Booking | Google Calendar API |
 | Notifications (internal) | Slack |
 | Notifications (broker-facing) | Resend |
+| Billing / payments | Dodo Payments (paid status drives the account's active switch) |
 
-> **To resolve:** the old doc said *Tavily*, the stack said *Perplexity* for web
-> enrichment. Pick ONE and kill the ambiguity. Also confirm the exact low-latency
-> LLM for the live call.
+> **Resolved (was open):**
+> - **Web enrichment = Tavily** (not Perplexity).
+> - **Live-call LLM = VAPI's built-in models** — start with a fast, cheap option
+>   (Groq Llama, ~200ms). VAPI bills per minute regardless of model ($10 free credit
+>   on signup, then pay-as-you-go); no self-hosting a model for the call.
+> - **Background enrichment LLM = a free model on OpenRouter** (not latency-sensitive).
 
 ---
 
@@ -97,7 +101,8 @@ engine.
 
 **Account-level**
 - Active / paused (our single master lever)
-- Pricing tier
+- Pricing tier + **billing status** (via **Dodo Payments**) — paid keeps the account
+  active; a failed or cancelled payment auto-pauses it
 - **Timezone + legal calling window** (per-account — critical once multiple states run at once)
 - **Daily dial cap**
 - **Refill threshold** (scrape more when callable leads drop below N)
@@ -146,7 +151,7 @@ Trigger (Vercel Cron, daily)
    Apify scrape ──► leads (account_id, state = new)
         │
         ▼
-   Crawl + enrich (regex → LLM → Perplexity)  ──► state: new → enriched
+   Crawl + enrich (regex → LLM → Tavily)  ──► state: new → enriched
         │
         ▼
    Compliance gate (opt-out list + calling hours, per account) ──► enriched → scrubbed
@@ -204,9 +209,11 @@ One data flow, two windows.
 1. **Broker must mark bookings closed or the machine seizes.** If they don't update,
    open bookings never clear, capacity stays at zero, engine goes silent. → Make closing
    a booking dead simple + nudge them (see §8).
-2. **Define what "open" really means.** A no-show from 3 weeks ago shouldn't clog
-   capacity forever. → "Open" = booked, meeting ahead or recently passed, awaiting
-   outcome, with an **aging rule** that auto-flags/resolves stale ones.
+2. **Define what "open" really means — DECIDED: no auto-free.** The system never
+   auto-closes a meeting. If a broker ignores every reminder, the engine simply waits
+   and keeps nudging, but books nothing new for that broker until they manually mark
+   the meeting closed. Closing is 100% the broker's responsibility; a stalled machine
+   is the intended consequence (a forcing function to keep brokers engaged).
 
 **Schema additions for this:** `booking_capacity` on the account; a `bookings` table with
 a broker-driven `status` (open → closed: won/lost/no-show). That status is the throttle's fuel.
@@ -217,9 +224,14 @@ a broker-driven `status` (open → closed: won/lost/no-show). That status is the
 
 - **Resend**, fired from the existing daily loop (which already holds each broker's
   open-booking count).
-- **Trigger on a meaningful condition, not every day.** The sharpest trigger: **at/near
-  capacity** — "You're at 20 of 20. We've paused finding new leads until you close some
-  out." That email has teeth because it ties their inaction to the thing stopping.
+- **Three broker-facing email triggers (DECIDED):**
+  1. **New meeting booked** — "You've got a new meeting" (the booking notification).
+  2. **One hour before the meeting** — reminder to the broker. *(Separate from, and in
+     addition to, the engine's AI reminder call to the prospect ~1hr before — both kept.)*
+  3. **Meeting time has passed and it's still not marked closed** — wait 24h, then email
+     "please mark this meeting closed." This is the nudge that frees a stuck capacity slot.
+- **No auto-close (see §7):** the after-meeting email keeps nudging, but the system never
+  closes a meeting itself — the broker must do it, or their machine stays paused.
 - **Email must drive the action:** deep link straight into their open-bookings view so
   closing one is ~2 clicks from the inbox.
 
@@ -264,9 +276,14 @@ The order follows the data, bottom-up. Each step is the input to the next.
 
 ---
 
-## 11. Open / to-decide
+## 11. Open / to-decide — ALL RESOLVED
 
-- Tavily vs Perplexity for web enrichment — pick one.
-- Exact low-latency LLM for the live call (provider + model).
-- Aging rule specifics for "open" bookings.
-- Whether to add a pre-capacity gentle reminder email (vs only the at-capacity one).
+- ~~Tavily vs Perplexity for web enrichment~~ → **Tavily.** (§3)
+- ~~Exact low-latency LLM for the live call~~ → **VAPI built-in model, start with Groq
+  Llama (~200ms).** Background enrichment LLM = a free OpenRouter model. (§3)
+- ~~Aging rule for "open" bookings~~ → **No auto-free; broker must mark closed, engine
+  waits.** (§7, §8)
+- ~~Pre-capacity reminder email?~~ → Replaced by the **three-trigger email plan**:
+  new-booking, 1hr-before, and after-meeting close nudge. (§8)
+- **Added since v1:** **Dodo Payments** for billing — paid status drives each account's
+  active switch. (§3, §4)
