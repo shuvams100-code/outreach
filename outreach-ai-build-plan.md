@@ -48,7 +48,7 @@
 | Crawl | Node/TS crawler (Playwright if JS-heavy) |
 | Enrichment | Regex first → LLM fallback (OpenRouter) → Tavily for gaps |
 | Call orchestration | VAPI |
-| Telephony / numbers | Twilio |
+| Phone numbers + telephony | **VAPI native US/Canada numbers** (area-code selectable; one bill via VAPI). Twilio only later if ever needed (international / large rotating pools) |
 | Speech-to-text | Deepgram |
 | Text-to-speech | Deepgram Aura-2 (or Cartesia Sonic) |
 | Booking | Google Calendar API |
@@ -82,10 +82,13 @@ engine.
 - What to research per lead + which fields get injected into the prompt
 - Depth (light vs deep)
 
-**Twilio / numbers**
-- Caller ID number(s), ideally area-code matched to target geo
-- Number pool (for rotation) if needed
+**Phone numbers (via VAPI — no Twilio)**
+- Caller ID number(s) bought directly from VAPI, area-code matched to target geo
+- Multiple numbers (for rotation) if needed — also from VAPI
 - Broker's real number for warm transfers / callbacks
+- *Why no Twilio:* buying numbers from VAPI keeps numbers + calling + per-minute billing
+  on one bill. Importing Twilio numbers would add a second, separate Twilio bill for
+  minutes. Twilio stays a later fallback only (international, or very large number pools).
 
 **VAPI / the agent**
 - System prompt / script template (with placeholders filled per call)
@@ -157,7 +160,7 @@ Trigger (Vercel Cron, daily)
    Compliance gate (opt-out list + calling hours, per account) ──► enriched → scrubbed
         │
         ▼
-   VAPI call (account's prompt + voice + Twilio caller ID) ──► scrubbed → calling
+   VAPI call (account's prompt + voice + VAPI caller ID) ──► scrubbed → calling
         │   (heavy work runs on VAPI's servers; webhooks call us back)
         ▼
    Result lands ──► calls table (account_id, transcript, recording, outcome)
