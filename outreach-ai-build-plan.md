@@ -70,12 +70,23 @@
 Everything below is a **settings field** on the account. Everything else lives in the
 engine.
 
+**Client identity & contact**
+- Business name
+- Contact person's name
+- Contact email — where booking alerts + the 3 reminder emails go (**required**)
+- Contact phone
+- Login email + password for their dashboard (maps the user → their `account_id`)
+- Broker's own timezone — for showing meeting times + sending reminders (separate from
+  the leads' calling-window timezone further down)
+
 **Apify / scraping**
 - Search query / business type
 - Geography (city, state, radius, area codes)
 - Which actor (Google Maps / LinkedIn / etc.)
 - Lead cap per run + filters
 - Scraping on/off (some brokers upload their own Excel instead)
+- If scraping is off: the uploaded lead file + which columns map to name / phone / etc.
+- Broker's own do-not-call / suppression list to import (numbers we must never dial)
 
 **Enrichment**
 - On/off
@@ -85,6 +96,7 @@ engine.
 **Phone numbers (via VAPI — no Twilio)**
 - Caller ID number(s) bought directly from VAPI, area-code matched to target geo
 - Multiple numbers (for rotation) if needed — also from VAPI
+- Branded caller-ID name (business name shown on the recipient's phone), if set up
 - Broker's real number for warm transfers / callbacks
 - *Why no Twilio:* buying numbers from VAPI keeps numbers + calling + per-minute billing
   on one bill. Importing Twilio numbers would add a second, separate Twilio bill for
@@ -96,18 +108,30 @@ engine.
 - Voice ID
 - The offer being pitched
 - Qualifying questions
+- Knowledge base about the broker (facts the agent uses to answer questions / handle
+  objections — what they offer, years in business, licenses, rough pricing, etc.)
 - Success definition (what counts as a booked appointment)
-- Calendar link
-- Warm-transfer number
-- Voicemail drop message
+- Voicemail drop message (and whether to leave one at all)
 - Max call duration, retry rules
+
+**Booking the meeting**
+- Connection to the broker's Google Calendar (so the engine can write events to it)
+- Meeting length + buffer (e.g. 30 min, 15 min gap)
+- The broker's availability windows (days/hours they actually take meetings)
+- Meeting type (Google Meet link / phone / in-person address)
+- Calendar/booking link given to the prospect
+- Warm-transfer number (+ the hours the broker accepts live transfers)
 
 **Account-level**
 - Active / paused (our single master lever)
 - Pricing tier + **billing status** (via **Dodo Payments**) — paid keeps the account
   active; a failed or cancelled payment auto-pauses it
 - **Timezone + legal calling window** (per-account — critical once multiple states run at once)
-- **Daily dial cap**
+- **Daily dial cap** — default **40 dials/day per phone number** (safely under the 50–75
+  industry spam-flag threshold). It's a *per-number* safety rail: to scale volume, add
+  another number (+40/day each), don't push one number harder. Note: spam risk is driven
+  by *dialing* patterns, not by conversations — real answered calls actually help a
+  number's reputation.
 - **Refill threshold** (scrape more when callable leads drop below N)
 - **Booking capacity** (max open bookings the broker can handle) — see §7
 
@@ -122,7 +146,9 @@ engine.
 **Internal ops dashboard** (our cockpit — build this, we live here)
 - Account list: create, activate/pause, master kill-switch.
 - Configuration panel: edit every account's settings (we configure the broker's prompt
-  etc. from our side — brokers don't touch prompt logic).
+  etc. from our side — brokers don't touch prompt logic). **Laid out as the 7 settings
+  buckets from §4.** Onboarding a client = create their account → fill the 7 buckets →
+  flip Active. No code, ever — just a form.
 - Monitoring: global overview across all accounts + per-account drill-down into every
   individual call (who, picked up?, transcript, recording, outcome).
 
@@ -290,3 +316,22 @@ The order follows the data, bottom-up. Each step is the input to the next.
   new-booking, 1hr-before, and after-meeting close nudge. (§8)
 - **Added since v1:** **Dodo Payments** for billing — paid status drives each account's
   active switch. (§3, §4)
+
+---
+
+## 12. Cost & limits (reality check)
+
+- **What costs money:** only live *conversations* (talk minutes) — roughly
+  **$0.08–0.12/min** all-in on the cheap setup (Groq brain + Deepgram voice + VAPI fee +
+  telephony). Ringing, no-answer, and busy signals are effectively free.
+- **What triggers spam flags:** *dialing* patterns per number — NOT conversations. Real
+  answered calls actually improve a number's reputation.
+- **Per-number dial cap = 40/day** (safely under the 50–75 industry threshold). Scale by
+  adding numbers (+40/day each), not by overloading one.
+- **₹2,000 budget (≈ $21 at ₹94.7/$, Jun 2026):** roughly **~700 dials / ~140 real
+  conversations** over 30 days. With VAPI's **$10 signup credit** (~$31 total): about
+  **~1,000 dials / ~200 conversations**. At ~25 dials/day, the **budget runs out long
+  before spam is ever a risk**.
+- **Bookings:** the most variable number — depends on script, offer, and list quality.
+  Rough early gut-feel: ~5–15 booked meetings per ~140 conversations, improving as the
+  script is tuned during tenant-0 testing.
