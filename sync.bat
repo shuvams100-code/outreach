@@ -60,7 +60,20 @@ if "%CURRENT_BRANCH%"=="" (
 echo [INFO] Current Branch: %CURRENT_BRANCH%
 echo.
 
-:: 4. Check for local changes and commit them first
+:: 4. [STEP 1] Pull latest changes from remote
+echo [INFO] Pulling latest changes from origin/%CURRENT_BRANCH%...
+git pull origin %CURRENT_BRANCH%
+if !ERRORLEVEL! neq 0 (
+    echo.
+    echo [ERROR] Pull failed.
+    echo If you have local changes that conflict with remote changes,
+    echo please commit or stash them first, then run this sync again.
+    goto end
+)
+echo [SUCCESS] Pulled latest changes successfully.
+echo.
+
+:: 5. [STEP 2] Merge/Commit local changes
 echo [INFO] Checking for local changes...
 git status --porcelain | findstr /R "^" >nul
 if !ERRORLEVEL! equ 0 (
@@ -83,20 +96,7 @@ if !ERRORLEVEL! equ 0 (
 )
 echo.
 
-:: 5. Pull latest changes with rebase
-echo [INFO] Pulling latest changes from origin/%CURRENT_BRANCH%...
-git pull --rebase origin %CURRENT_BRANCH%
-if !ERRORLEVEL! neq 0 (
-    echo.
-    echo [CRITICAL ERROR] Pull failed.
-    echo This is usually due to merge conflicts or network issues.
-    echo Please resolve any conflicts manually, then run this script again.
-    goto end
-)
-echo [SUCCESS] Pulled latest changes successfully.
-echo.
-
-:: 6. Push local changes
+:: 6. [STEP 3] Push changes to remote
 echo [INFO] Pushing changes to origin/%CURRENT_BRANCH%...
 git push origin %CURRENT_BRANCH%
 if !ERRORLEVEL! neq 0 (
