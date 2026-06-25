@@ -2,67 +2,124 @@
 
 > Living log. Every session: append what was done + any decision.
 > Task boxes: `[ ]` todo · `[~]` in progress · `[x]` done.
-> Full design = `build-plan.md` · visual flow map = `flow.html` (open in a browser). This file tracks *execution*.
+> Full design = `build-plan.md` · visual flow = `flow.html` · per-account fields = `onboarding-checklist.md`.
 
-**Where we are:** Step 1 done ✅ · Step 2 (engine) planned, building next.
-
----
-
-## Build order (7 steps)
-1. [x] **Schema** — multi-tenant foundation
-2. [~] **Engine** (account-scoped) — planned, not started
-3. [ ] **Seed tenant 0 + validate**
-4. [ ] **Internal ops dashboard**
-5. [ ] **Auth + RLS**
-6. [ ] **Broker dashboard**
-7. [ ] **Onboarding flow**
+**Where we are:** Pivoted to a horizontal **inbound + outbound AI calling service** (2026-06-25).
+Engine-centric rebuild. Phase 1 = engine core + upload + inbound. Scraping demoted to Phase 2.
 
 ---
 
-## Tasks
+## Build order
 
-### Step 1 — Schema ✅ (done 2026-06-25)
-- [x] Wipe old Supabase clean (deleted 2 auth users; public schema was empty)
-- [x] 5 tables: `accounts`, `leads`, `calls`, `bookings`, `opt_outs`
-- [x] `account_id` FK on every non-account table (multi-tenant from line one)
-- [x] Enums + lead state machine (new→enriched→scrubbed→calling→booked/no_answer/not_interested)
-- [x] `updated_at` trigger (search_path pinned)
-- [x] RLS enabled on all 5 (policies deferred to Step 5)
-- [x] Security advisor clean
+**Phase 1 — universal core (works for every client, no scraping):**
+1. [~] **Engine: outbound call → qualify → book → notify** (VAPI + Google Calendar) — the heart
+   - [x] Place call via VAPI from per-account assistant config (`src/call.ts`) — proven (VAPI accepts request)
+   - [x] Agent web-tested: qualified a lead + booked a demo; objection handling added; voice locked
+   - [x] 1b: wire to contacts → save outcome to `calls` → set state + retries (`src/outcome.ts` classifyCall pure+unit-tested; `callContact` orchestrator built — live-verify pending a US-reachable number)
+   - [x] daily run: pick today's list (retries-capped-at-40% then fresh, cap 40) + per-lead-timezone calling window (`src/daily.ts`, pure parts unit-tested; orchestrator built, live-verify pending)
+   - [ ] 1c: book on calendar when interested (needs Google Calendar)
+   - [ ] 1d: notify (Slack / Resend)
+2. [x] **CSV / list upload** → normalize → contact ✅ (2026-06-25) — verified end-to-end against DB (5 sample brokers inserted as `scrubbed` with correct names/phones/timezone, then cleaned up)
+3. [ ] **Inbound answering** → VAPI inbound assistant → answer → qualify → book
 
-### Step 2 — Engine (build locally first, deploy last)
-- [x] 2.0 Skeleton — Node/TS project + Supabase client + seed tenant-0 row ✅ (2026-06-25)
-- [~] 2.1 Scrape (Apify) → `leads` (state=new) — code built + unit-checked; awaiting first real run
-- [ ] 2.2 Enrich (regex → OpenRouter → Tavily) → enriched
-- [ ] 2.3 Compliance gate (opt-outs + legal calling hours) → scrubbed
-- [ ] 2.4 Call (VAPI) + results webhook → `calls`
-- [ ] 2.5 Route results (booked→Calendar+Slack · no-answer→retry · not-interested→done) + capacity throttle
-- [ ] 2.6 Reminders (Resend) — deferred until real bookings exist
-- [ ] 2.7 Daily cron + deploy to Vercel
+**Phase 2 — extra input pipes:**
+4. [ ] **Web-form capture** (webhook ingestion)
+5. [~] **Scraping + enrichment module** (B2B-business accounts only) — *partially built pre-pivot, see below*
 
-### Steps 3–7 — (expand when reached)
-- [ ] 3 Seed tenant 0, run end-to-end, real dials
-- [ ] 4 Ops dashboard (account list, config = 7 settings buckets, monitoring)
-- [ ] 5 Auth (email+password) + RLS policies (scope every query to account_id)
-- [ ] 6 Broker dashboard (read-only slice + mark-booking-closed + billing)
-- [ ] 7 Onboarding flow (create account → fill 7 buckets → flip active)
+**Then:**
+6. [ ] Tenant-0 validation (feed broker list via **upload**, run end-to-end, real dials)
+7. [ ] Internal ops dashboard
+8. [ ] Auth + RLS
+9. [ ] Client dashboard
+10. [ ] Onboarding flow
+
+---
+
+## What's already built (and where it now sits)
+
+| Component | File | Status after pivot |
+|---|---|---|
+| Multi-tenant schema (5 tables, `account_id` everywhere, RLS on) | Supabase | ✅ Keep — generic foundation |
+| Service-role Supabase client | `src/lib/supabase.ts` | ✅ Keep |
+| Tenant-0 seed | `scripts/seed-tenant0.ts` | ✅ Keep (account row) |
+| Opt-out / DNC compliance gate | `src/compliance.ts` | ✅ Keep — universal, runs on every pipe |
+| Scraping (Yellow Pages / Maps, source per account) | `src/scrape.ts` | 🟡 Phase 2 — optional B2B pipe |
+| Enrichment (regex → free LLM → Tavily) | `src/enrich.ts` | 🟡 Phase 2 — runs on scraping pipe only |
+| `accounts.sources` jsonb (multi-source) | Supabase | ✅ Keep |
+| `leads` enrich columns + `disqualified` state | Supabase | ✅ Keep (generalize `leads`→contacts later if needed) |
+
+> Nothing built is wasted — the pivot **demotes** scraping/enrichment from the trunk to one optional
+> pipe. The calling engine itself (outbound call + book) was never built yet — that's Phase 1, step 1.
+
+---
+
+## Schema notes for Phase 1
+
+- `leads` table holds contacts fine as-is (business_name, phone, first/last name, email, raw_data).
+  May rename to `contacts` when generalizing; not urgent.
+- Need to add per-account: `direction` (outbound/inbound flags) · upload column-mapping · calendar
+  connection · `icp_description` + `exclude_names` (per-account qualification, replaces hardcoded
+  broker check) · booking settings. Add as each Phase-1 step needs them — see `onboarding-checklist.md`.
 
 ---
 
 ## Decision log
-Full reasoning lives in `build-plan.md`; this is the index.
 
-- **2026-06-25 — Stack/scope locked:** Tavily for enrichment · VAPI built-in Groq model for the live call · free OpenRouter model for background enrichment · Dodo Payments for billing (paid = active switch) · full version (not MVP).
-- **2026-06-25 — Phone:** VAPI native US numbers, **no Twilio** (one bill; Twilio only a later fallback).
-- **2026-06-25 — Limits:** 40 dials/day **per number** (spam-safe). Spam risk = dialing pattern; cost = conversation minutes (~$0.08–0.12/min). ₹2,000 ≈ ~700 dials / ~140 conversations / 30 days.
-- **2026-06-25 — Capacity:** no auto-free of ghost meetings — broker must mark closed or engine waits. 3 reminder emails (new booking · 1h before · after-meeting close nudge).
-- **2026-06-25 — Step 1 built:** Supabase project `miixcjufwowjixgcnfka`. 5 tables, RLS on.
-- **2026-06-25 — Tooling:** adopted Ponytail (lazy/minimal) plugin, full mode.
-- **2026-06-25 — Engine approach:** build/test locally stage-by-stage, deploy to Vercel last · the lead `state` column IS the queue (no queue system) · plain website fetch before reaching for Playwright.
-- **2026-06-25 — B2B vs B2C onboarding + source-agnostic ingestion (locked):** Onboarding asks (1) business name, then (2) **who their customers are** → new `accounts.customer_type` (b2b | b2c), which sets source defaults. **B2B** (targets are businesses) → scraping + CSV upload both available, toggleable. **B2C** (targets are the general public) → **scraping OFF by default, CSV upload only.** Why: the public can't be scraped (no legitimate source — consumer numbers aren't published like businesses), and **AI-voice calling of consumers needs prior written consent** (TCPA + national Do-Not-Call; FCC 2024 puts AI-generated voices under those rules). So B2C brokers bring **consented** leads (own CRM / opt-in web-form / purchased opt-in lists) and upload them. **Source-agnostic ingestion:** scraped OR uploaded, every lead passes one normalization step (→ standard lead shape, dedupe by phone, save as `new`), so the whole downstream pipeline is identical regardless of source. **DNC scrubbing + consent tracking** join the compliance gate the moment a B2C account onboards. Onboarding UI is Step 7; the `customer_type` field + normalization layer are designed in now.
-- **2026-06-25 — Multi-source lead acquisition (production design from line one):** Scraping is **source-agnostic and multi-source**, not Maps-only. One coordinated run per area **fans out to all enabled sources in parallel**, normalizes each to the common lead shape, **merges + dedupes by phone** (a business on Maps+Yelp+directory = one lead), tags `leads.source`. **Default = Google Maps ONLY** (covers most local businesses + phones, cheapest; ~$0.004/lead, free $5 ≈ ~1,200 leads/mo — already over-supplies dial capacity). **Yelp / Yellow Pages / web-search = per-tenant opt-in** — built in, zero-code to enable, but each bills for its own results *with heavy overlap* (same business across sources), so they fire only when a tenant wants broader coverage and their retainer covers it; NOT always-on. **Customer CSV upload** always available + free (storage only). **LinkedIn** = optional, enrichment-only (low phone yield). **Social media excluded** (no phone numbers). Honest cost: each source bills for its own results (more sources = more scrape cost), but dedupe means **research + calling are paid once per unique business**, coverage tracking (per source) prevents re-scrape, and **the source set is a per-account setting** (budget tenant = Maps only; premium = all). Schema: `accounts.apify_actor` (single) → **`sources` jsonb** (list of {key, enabled, filters}); `scrape_runs` tracks coverage **per source**.
-- **2026-06-25 — Enrichment, scraping & multi-region detail (built at 2.2+, locked now):** **(1) Enrichment chain** = regex (free) → free LLM reads website (free) → **Tavily as default final fallback** (paid, fires only when site is missing/thin; rare since upstream usually wins). LLM pick: **`gpt-oss-120b` primary, DeepSeek V4 fallback** (free, structured-output capable; ~200 req/day free limit >> our 50/day; exact `:free` IDs confirmed at build time). Output is a **detailed profile** (what they do, who they serve, specialties, a talking angle), not a one-liner. **(2) Junk** (non-broker) → new `disqualified` state, never dialed/billed. **(3) Multi-region** = per-lead timezone derived from the phone's **area code** (free static map), stored on `leads.timezone`; calling window is evaluated in each lead's local time, so one account targets many regions with zero extra config. **(4) Names:** capture first/last when the site exposes a person; when absent the call greets the business and asks live (greeting is a template on `first_message`). **(5) Scrape volume ≠ dial cap:** scrape the **full sweep** of an area (not 50), ceiling = `lead_cap_per_run` (default **500**, ~$2 worst-case one-time); dial cap stays 40/day. **(6) No re-scrape waste:** Maps has no exclusion list, so track mined (term+area) in a new **`scrape_runs`** table and always aim at fresh ground; post-scrape dedupe is the backstop. **(7) `manual_followup` view** (state=no_answer AND retry_count>=3) → name, phone, company, times called, call dates, business profile — for offline email/LinkedIn. Full visual: `flow.html`.
-- **2026-06-25 — Calling window + cadence strategy (built at 2.3/2.7, locked now):** Dial **Mon–Fri only** (skip weekends) within legal hours, computed in **each lead's own timezone**; skip **US federal holidays** (small built-in date list, no dependency, one-line yearly update). These checks are the `enriched → scrubbed` compliance gate (2.3) — `scrubbed` = cleared to call now. **Spread the daily 40 across working hours, not one burst** — catches people at varied moments (better pickup) and looks less robotic to carriers (safer from spam flags); same change, both wins. Retry rationale: the 3-attempt cap is the balance — most eventual contacts happen on a *later* attempt (so abandoning after one try would *lower* total bookings), but odds thin out by attempt 4+ (so we stop at 3). Optimize **total bookings, not per-dial pickup %.** A no-answer consumes ≤3 dials over ~9 days then ages out — old leads can't choke the pipeline. Overdue retries landing on a weekend/holiday roll to the next business day automatically (dialer refuses non-business days; the due-query picks them up next valid day — no date math). Soft cap on retry share deferred — add only if data shows retries crowding out fresh (forcing fresh daily would force daily scrape spend).
-- **2026-06-25 — Daily-run priority + retry policy (built at 2.5/2.7, locked now):** The daily job fills the **40-dial/day hard cap** (retries count *inside* it, never on top) by querying leads in priority order: (1) no-answers due for retry, (2) ready never-called (`scrubbed`), (3) only if still under 40, scrape+enrich fresh to top up. Scraping is demand-driven, not every-run. No-answer retry: **3 attempts, flat 3-day gap** (e.g. Mon→Thu→Sun, then give up). The `state` + `next_retry_at` columns ARE the queue — a DB query sorts it, no queue system.
-- **2026-06-25 — Stage 2.1 built:** Google Maps Scraper (`compass/crawler-google-places`, ~$0.004/place) via Apify `run-sync-get-dataset-items` (no SDK, one `fetch`). `scrapeAccount(id)` reads the account's `search_query`+`geo_city`+`geo_state`, scrapes ≤50 places, drops no-phone + duplicate phones (in-DB and intra-batch), inserts the rest as `state=new`. Pure `selectNewLeads` extracted + unit-checked (`npm test`). Run: `npm run scrape`. Target still Austin TX (placeholder — scraping dials no one, so real-dial target is deferred to 2.4).
-- **2026-06-25 — Stage 2.0 built:** Node/TS skeleton (`package.json`, `tsconfig.json`, `src/lib/supabase.ts`, `scripts/seed-tenant0.ts`). No `dotenv` (Node `loadEnvFile`), `tsx` runs TS directly. Service-role Supabase client. Tenant-0 seeded with fixed id `00000000-…-0000` (upsert = re-run safe), status active, target = insurance broker / Austin TX (editable). Smoke test passed: key connects, row written.
+Full reasoning in `build-plan.md`; this is the index.
+
+- **2026-06-25 — PIVOT to horizontal calling service:** Reframed from a broker-scraping outbound tool
+  to an **inbound + outbound AI calling-as-a-service** for any business. Realized via three real use
+  cases: (1) web-form capture → call, (2) uploaded prospect list → call, (3) **inbound after-hours
+  answering** → our agent picks up, qualifies, books. Engine sits at the center; four input pipes feed
+  it (upload, inbound, form, scraping); **scraping is one optional B2B pipe, not the spine**; brokers =
+  tenant-0's vertical, not the product. Build order re-sequenced: **Phase 1 = engine core + upload +
+  inbound** (universal, no scraping); web-form + scraping = Phase 2. All docs + flow.html rewritten.
+- **2026-06-25 — Daily run built:** `src/daily.ts` — `selectCallList` (pure, tested): fill the daily cap
+  in priority order, retries first capped at `max_share` (40% → 16/day, overflow rolls over), then fresh
+  `scrubbed`. `isWithinCallingWindow` (pure, tested): Mon–Fri + hours evaluated in each lead's own timezone
+  (Intl, area-code tz). `runDailyAccount` orchestrator queries candidates → selects → filters to in-window →
+  `callContact` each. Added per-account `daily_dial_cap`, `calling_hours_start/end`. Holidays + capacity
+  throttle deferred (noted in code). Run: `npm run daily`. Live-verify pending US-reachable number.
+- **2026-06-25 — Phase 1 step 1b (call → outcome → state) built:** `src/outcome.ts` `classifyCall` (pure,
+  unit-tested): not-answered/error/unknown → `no_answer` + retry (+gap_days, exhaust at max_attempts);
+  answered+structuredData.outcome=booked → `booked`; else answered → `not_interested`. `callContact` in
+  `src/call.ts` runs the full cycle (mark calling → place → poll → classify → insert `calls` row → update
+  lead). `retry_rules` added to accounts (per-account). Live-verify pending a US-reachable number; the
+  booked-detection (VAPI structured output) gets wired with the booking tool in 1c. Run: `npm run call-contact -- <lead-id>`.
+- **2026-06-25 — Phase 1 step 1 (calling agent) proven via web test:** `src/call.ts` places VAPI calls
+  from the account's `vapi_assistant` config (nothing hardcoded — script/voice/model all per-account data).
+  Free US number can't dial India (international blocked) so PSTN dial untested from here, but VAPI accepted
+  the call request (config valid). Web-tested the agent in-browser: it qualified a broker and booked a demo.
+  Added an objection-handling playbook to the prompt. **Voice locked: 11labs `TX3LPaxmHKxFdv7VOQHJ`.**
+  **Script refinement deferred** to a dedicated session once the machinery is built. Tune script/voice any
+  time via SQL on `accounts.vapi_assistant`; `npm run make-test-assistant` re-syncs the browser-test copy.
+- **2026-06-25 — Phase 1 step 2 (upload pipe) built + verified:** `src/upload.ts` — parse CSV
+  (quote-aware) → auto-map common headers → normalize phone to E.164 → dedupe (intra-file + DB) →
+  opt-out check → insert as `scrubbed` (ready) or `disqualified`. Timezone set from area code. No keys
+  needed. Verified end-to-end against Supabase (5 sample rows), then cleaned. Run: `npm run upload -- <csv>`.
+- **2026-06-25 — Qualification is per-account, never hardcoded:** carrier-exclusion + "is it a broker"
+  is **tenant-0's ICP config** (`exclude_names` + `icp_description`), not engine logic. A B2C client
+  calling consumers has no such filter. Caught a hardcoding mistake mid-build.
+- **2026-06-25 — Scraping ≠ tenant-0 only:** B2B clients targeting *businesses* (commercial insurance
+  brokers, etc.) also scrape; B2C clients (consumer-facing) upload consented lists. Gated by
+  `customer_type` (b2b/b2c).
+- **2026-06-25 — Lead source for tenant-0 scraping = Yellow Pages US** ("Insurance Brokers" category,
+  `trudax/yellow-pages-us-scraper`). Category pre-excludes carriers; `isAd:true` rows dropped; phone
+  normalized to E.164. Probed: output has `name, phone, website, address, categories, infoSnippet`.
+  *(Now a Phase-2 concern.)*
+- **2026-06-25 — Enrichment models fixed:** OpenRouter free IDs verified via `scripts/probe-llm.ts` —
+  `openai/gpt-oss-120b:free` (primary) + `openai/gpt-oss-20b:free` (fallback) return 200; old
+  llama/deepseek IDs were 429/404. Enrichment now: working models, 429 fallback, no hollow-success
+  (empty result stays `new`), per-lead progress logging. *(Phase-2 pipe.)*
+- **2026-06-25 — Stack / capacity / compliance / retry** locked — see build-plan.md §6–11.
+- **2026-06-25 — Step 1 schema built:** Supabase `miixcjufwowjixgcnfka`, 5 tables, RLS on.
+- **2026-06-25 — Tooling:** Ponytail (lazy/minimal) plugin, full mode.
+
+---
+
+## History (pre-pivot, for reference)
+
+The original plan was a broker-only outbound scraping tool: scrape Google Maps → enrich → compliance →
+call → book. Stages 2.0–2.3 were built against that frame (skeleton, scrape, enrich, compliance). The
+pivot keeps the engine + compliance and demotes scrape/enrich to an optional pipe. Tenant-0 (50 Google
+Maps broker leads) was deleted to start clean before the pivot.

@@ -5,10 +5,20 @@
   "scripts": {
     "seed": "tsx scripts/seed-tenant0.ts",
     "scrape": "tsx scripts/scrape-tenant0.ts",
-    "test": "tsx src/scrape.test.ts"
+    "enrich": "tsx scripts/enrich-tenant0.ts",
+    "scrub": "tsx scripts/scrub-tenant0.ts",
+    "upload": "tsx scripts/upload-tenant0.ts",
+    "call-test": "tsx scripts/call-test.ts",
+    "make-test-assistant": "tsx scripts/create-test-assistant.ts",
+    "call-contact": "tsx scripts/call-contact.ts",
+    "daily": "tsx scripts/daily-tenant0.ts",
+    "probe-calendar": "tsx scripts/probe-calendar.ts",
+    "probe-booking": "tsx scripts/probe-booking.ts",
+    "test": "tsx src/scrape.test.ts && tsx src/enrich.test.ts && tsx src/compliance.test.ts && tsx src/upload.test.ts && tsx src/outcome.test.ts && tsx src/daily.test.ts && tsx src/calendar.test.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2"
+    "@supabase/supabase-js": "^2",
+    "googleapis": "^173.0.0"
   },
   "devDependencies": {
     "@types/node": "^22",

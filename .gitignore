@@ -11,6 +11,9 @@ build/
 .env
 .env.*
 !.env.example
+# Google service-account key (NEVER commit)
+reacher-ai-*.json
+*-service-account*.json
 
 # Logs
 *.log
