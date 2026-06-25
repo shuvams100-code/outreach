@@ -1,4 +1,4 @@
-# Outreach.ai — Client Onboarding Checklist
+# Reacher AI — Client Onboarding Checklist
 
 > **How to onboard a client:** create their `accounts` row, fill the fields below, and flip `status = active`. The engine picks them up automatically. Nothing in the code changes per client — only this database row.
 >

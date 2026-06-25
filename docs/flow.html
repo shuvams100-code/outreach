@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Outreach.ai — How the System Works</title>
+<title>Reacher AI — How the System Works</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
@@ -171,9 +171,9 @@
 <body>
 <div class="wrap">
 <header>
-  <span class="brand">Outreach.ai</span>
+  <span class="brand">Reacher AI</span>
   <h1>How the system works</h1>
-  <div class="sub">A managed AI calling service — <b>inbound and outbound</b>. Contacts enter through uploads or scraping;
+  <div class="sub">A managed AI calling service — <b>inbound and outbound</b>. Contacts enter through uploads, web forms, or scraping;
     one engine qualifies, calls, books meetings, sends reminders, and throttles capacity. Every node is connected —
     one continuous, self-regulating system.</div>
   <div class="legend">
@@ -217,6 +217,7 @@
 
           subgraph S1 ["  STAGE 1 — Data Enters the System"]
             Upload(["Client uploads CSV / Excel"]):::se
+            WebForm(["Web-form capture · Phase 2"]):::opt
             InboundRing(["Prospect calls inbound number"]):::se
             NeedLeads{"B2B account &amp; backlog<br/>below refill threshold?"}:::dec
             NeedLeads -- "No — backlog healthy" --> UseExisting["Use existing leads"]:::act
@@ -235,6 +236,7 @@
           end
 
           Upload --> Normalize
+          WebForm --> Normalize
           ICPGate -- "Yes" --> Normalize
           UseExisting -.-> Ready
           Normalize --> DNCCheck
@@ -253,10 +255,14 @@
             FreshSlot --> TZGate{"Inside legal<br/>calling hours?<br/>(lead TZ)"}:::dec
             TZGate -- "No" --> SkipLead["Skip lead"]:::act
             TZGate -- "Yes" --> PlaceCall["Place VAPI outbound call<br/>(AI pitches · qualifies)"]:::act
+            PlaceCall --> AgreesQ{"Prospect agrees<br/>to a meeting?"}:::dec
+            AgreesQ -- "Yes" --> LiveAvail["Agent checks live calendar<br/>(check_availability tool)"]:::act
+            LiveAvail --> LiveBook["Agent books a slot mid-call<br/>(book_appointment tool)"]:::act
           end
 
           Ready --> Build
           DailyCron --> ActiveCheck
+          DailyCron -.-> NeedLeads
 
           subgraph S4 ["  STAGE 4 — Resolution &amp; Smart Retry"]
             SaveCall["Save transcript · recording ·<br/>cost · duration"]:::act
@@ -274,7 +280,9 @@
             Outcome -- "Booked" --> Booked["BOOKED ✓"]:::good
           end
 
-          PlaceCall --> SaveCall --> Outcome
+          LiveBook --> SaveCall
+          AgreesQ -- "No" --> SaveCall
+          SaveCall --> Outcome
           RetryQ -.-> RetrySlot
 
           subgraph S5 ["  STAGE 5 — Inbound · Reactive · 24/7"]
@@ -282,7 +290,8 @@
             InbConv["Converse · qualify"]:::act
             InbWant{"Wants to book?"}:::dec
             InbWant -- "No" --> InbLog["Log &amp; end"]:::act
-            InbWant -- "Yes" --> InbBooked["BOOKED ✓"]:::good
+            InbWant -- "Yes" --> InbAvail["Agent checks live calendar<br/>+ books slot mid-call"]:::act
+            InbAvail --> InbBooked["BOOKED ✓"]:::good
           end
 
           InboundRing --> InbPick --> InbConv --> InbWant
@@ -294,8 +303,12 @@
             PreMeet{"1h before meeting"}:::dec
             RemCall["VAPI reminder call<br/>to prospect"]:::act
             RemEmail["Reminder email<br/>to prospect"]:::act
+            ConfirmQ{"Prospect<br/>confirms?"}:::dec
+            Confirmed["CONFIRMED<br/>(meeting stands)"]:::good
+            Reschedule["Wants to reschedule<br/>→ re-book a slot"]:::act
             MeetPasses["Meeting time passes"]:::act
             Closed{"Client marked<br/>closed?"}:::dec
+            NoShow["NO-SHOW<br/>(flag · optional follow-up)"]:::bad
             Nudge["Nudge email (24h loop)"]:::opt
             DecOpen["Open bookings − 1"]:::act
             CapFree["Capacity freed →<br/>engine resumes"]:::fb
@@ -308,10 +321,16 @@
           CalEvent --> PreMeet
           PreMeet --> RemCall
           PreMeet --> RemEmail
+          RemCall --> ConfirmQ
+          ConfirmQ -- "Yes" --> Confirmed
+          ConfirmQ -- "Reschedule" --> Reschedule
+          Reschedule -.-> CalEvent
           CalEvent --> MeetPasses --> Closed
           Closed -- "No (24h)" --> Nudge
           Nudge -.-> Closed
-          Closed -- "Yes" --> DecOpen --> CapFree
+          Closed -- "Yes · won / lost" --> DecOpen --> CapFree
+          Closed -- "Yes · no-show" --> NoShow
+          NoShow --> DecOpen
 
           IncOpen -. "feeds into" .-> CapGate
           CapFree -. "frees slot" .-> CapGate
@@ -421,7 +440,7 @@
     <p class="note">Onboarding = fill one DB row, flip <code>active</code>. Direction + customer type determine which pipes activate.</p>
   </div>
 </main>
-<footer>Outreach.ai — inbound + outbound AI calling, end to end.</footer>
+<footer>Reacher AI — inbound + outbound AI calling, end to end.</footer>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->

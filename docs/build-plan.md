@@ -1,4 +1,4 @@
-# Outreach.ai — Master Build Plan
+# Reacher AI — Master Build Plan
 
 > A managed, multi-tenant **AI calling service — inbound and outbound**. Any business signs up; our AI voice agent makes their outbound calls (qualify + book meetings) and/or answers their inbound calls after-hours (converse + book). Fully managed — the client configures once, the system runs.
 >
