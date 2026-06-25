@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Outreach.ai — How the System Works</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg1:#eef2fb; --bg2:#f6f8fd; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --indigo:#4f46e5;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; color:var(--ink); background:linear-gradient(180deg,var(--bg1),var(--bg2) 320px);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; }
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 24px; }
+
+  header{ padding:48px 0 8px; }
+  .brand{ display:inline-block; font-weight:700; letter-spacing:.02em; color:var(--indigo);
+    background:#eef2ff; border:1px solid #dfe3ff; padding:5px 12px; border-radius:999px; font-size:13px; }
+  h1{ margin:16px 0 6px; font-size:30px; letter-spacing:-.01em; }
+  .sub{ color:var(--muted); font-size:16px; max-width:680px; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:16px; margin:22px 0 8px; }
+  .chip{ display:flex; align-items:center; gap:8px; font-size:13px; color:#334155; }
+  .dot{ width:13px; height:13px; border-radius:4px; box-shadow:0 1px 2px rgba(15,23,42,.18); }
+  .d-start{ background:#4f46e5; } .d-action{ background:#f1f5f9; border:1px solid #cbd5e1; }
+  .d-dec{ background:#fde68a; } .d-good{ background:#a7f3d0; } .d-bad{ background:#fecdd3; }
+  .d-opt{ background:#eef2ff; border:1px dashed #94a3b8; }
+  .card.hero{ border-color:#c7d2fe; box-shadow:0 16px 44px -16px rgba(79,70,229,.40),0 2px 6px rgba(30,41,90,.06); }
+  .subhead{ margin:36px 0 2px; font-size:18px; color:#475569; }
+  .subhead + p{ margin:0; color:#64748b; font-size:14px; }
+
+  main{ padding:8px 0 72px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:18px;
+    padding:24px 26px; margin:22px 0; box-shadow:0 10px 30px -12px rgba(30,41,90,.18), 0 2px 6px rgba(30,41,90,.06); }
+  .card h2{ margin:0; font-size:20px; display:flex; align-items:center; gap:10px; }
+  .num{ display:inline-grid; place-items:center; width:30px; height:30px; border-radius:9px;
+    background:var(--indigo); color:#fff; font-size:15px; font-weight:700; box-shadow:0 4px 10px -3px rgba(79,70,229,.6); }
+  .card p.note{ color:var(--muted); font-size:14px; margin:14px 0 0; padding-top:12px; border-top:1px dashed #e8edf6; }
+  .mermaid{ margin-top:14px; overflow-x:auto; text-align:center; }
+  /* soft shadow on every diagram node */
+  .mermaid .node rect, .mermaid .node circle, .mermaid .node polygon,
+  .mermaid .node path, .mermaid .node ellipse{
+    filter: drop-shadow(0 4px 8px rgba(15,23,42,.12)); }
+  footer{ color:var(--muted); font-size:13px; text-align:center; padding:0 0 48px; }
+  code{ background:#eef2f8; padding:1px 6px; border-radius:5px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="brand">OUTREACH.AI</span>
+  <h1>How the system works</h1>
+  <div class="sub">From finding a business to booking a meeting — fully automated, fully managed.
+    Each step runs on its own; nothing needs a human to push a button.</div>
+  <div class="legend">
+    <div class="chip"><span class="dot d-start"></span> Start / End</div>
+    <div class="chip"><span class="dot d-action"></span> Action</div>
+    <div class="chip"><span class="dot d-dec"></span> Decision</div>
+    <div class="chip"><span class="dot d-good"></span> Good outcome</div>
+    <div class="chip"><span class="dot d-bad"></span> Stop / removed</div>
+    <div class="chip"><span class="dot d-opt"></span> Optional (on/off)</div>
+  </div>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2><span class="num">▶</span> Onboarding a new client</h2>
+    <div class="mermaid">
+    flowchart TD
+      Start(["New client"]):::se --> Name["1 · Their business name"]:::act
+      Name --> Who{"2 · Who are their customers?"}:::dec
+      Who -- "Other businesses (B2B)" --> B2B["Scraping ON + CSV upload<br/>both available, toggleable"]:::good
+      Who -- "General public (B2C)" --> B2C["Scraping OFF · CSV upload only<br/>they bring a consented list"]:::warn
+      B2B --> Norm["Any lead — scraped OR uploaded —<br/>normalized to one standard format"]:::act
+      B2C --> Norm
+      Norm --> Save["Saved to the database as a new lead"]:::act
+      Save --> Enter(["Enters the calling flow ↓"]):::se
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef warn fill:#ffedd5,stroke:#fb923c,color:#7c2d12;
+    </div>
+    <p class="note"><b>B2B</b> (calling businesses) → our scraper finds the leads. <b>B2C</b> (calling
+      the general public) → scraping is off and the client uploads their own consented list, because
+      individuals can't be scraped and AI-voice calls to consumers require their prior consent. Either
+      way, every lead is normalized into the same format and flows through the same system below.</p>
+  </div>
+
+  <div class="card hero">
+    <h2><span class="num">★</span> The complete system — start to finish</h2>
+    <div class="mermaid">
+    flowchart TD
+      Cron(["Daily run starts"]):::se --> Active{"Account active<br/>& billing OK?"}:::dec
+      Active -- No --> Rest["Skip — paused"]:::bad
+      Active -- Yes --> Cap{"Booking slots free?<br/>open meetings below the limit"}:::dec
+      Cap -- "No · full" --> Hold["Hold — stop dialing<br/>until a meeting is closed"]:::warn
+      Cap -- Yes --> Time{"Weekday, no holiday,<br/>inside calling hours?"}:::dec
+      Time -- No --> Waitt["Wait for a valid time"]:::warn
+      Time -- Yes --> Need{"Enough ready leads?"}:::dec
+
+      Need -- "No · low" --> Scrape["Find new leads<br/>Maps + optional Yelp/YP/web/CSV"]:::act
+      Scrape --> Enrich["Research each lead<br/>regex → AI → web fallback"]:::act
+      Enrich --> Broker{"A real broker?"}:::dec
+      Broker -- No --> Drop["Remove — never called"]:::bad
+      Broker -- Yes --> Comply{"On do-not-call list?"}:::dec
+      Comply -- Yes --> Drop
+      Comply -- No --> Ready["Cleared to call"]:::good
+      Ready --> Build
+      Need -- Yes --> Build["Build today's call list<br/>callbacks first (max 40%) then fresh · cap 40"]:::act
+
+      Build --> Dial["Place call via VAPI<br/>AI voice agent"]:::act
+      Dial --> Talk["AI pitches · answers questions · qualifies"]:::act
+      Talk --> SaveDB["Save to database<br/>transcript · recording · outcome"]:::act
+      SaveDB --> Outcome{"Result?"}:::dec
+
+      Outcome -- "No answer" --> Cnt["Count the attempt"]:::act
+      Cnt --> Tries{"3rd miss?"}:::dec
+      Tries -- No --> Later["Try again in 3 days"]:::act
+      Later --> Build
+      Tries -- Yes --> Follow["Follow-up list<br/>your manual email / LinkedIn"]:::warn
+      Outcome -- "Not interested" --> NoGo["Closed — never again"]:::bad
+      Outcome -- "Meeting booked" --> Cal["Create calendar event + Meet link"]:::good
+      Cal --> Booking["Booking saved · status OPEN"]:::good
+
+      Booking --> Opens["Open meetings + 1"]:::act
+      Opens -. feeds back .-> Cap
+
+      Booking --> Slack["Slack alert"]:::opt
+      Booking --> Mail1["Email: new meeting"]:::opt
+      Booking --> Remind["~1h before:<br/>reminder call to prospect"]:::opt
+      Remind --> Mail2["Email: reminder to broker"]:::opt
+
+      Booking --> Wait2["When meeting time passes"]:::act
+      Wait2 --> Closed{"Broker marked it closed?<br/>won / lost / no-show"}:::dec
+      Closed -- No --> Nudge["Wait 24h, then nudge"]:::opt
+      Nudge --> Mail3["Email: please mark closed"]:::opt
+      Mail3 -. still open .-> Closed
+      Closed -- Yes --> FreeSlot["Free one booking slot"]:::good
+      FreeSlot -. wakes up .-> Cap
+
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef bad fill:#ffe4e6,stroke:#f43f5e,color:#9f1239;
+      classDef warn fill:#ffedd5,stroke:#fb923c,color:#7c2d12;
+      classDef opt fill:#eef2ff,stroke:#94a3b8,stroke-dasharray:5 4,color:#475569;
+    </div>
+    <p class="note"><b>Dashed boxes are optional</b> — Slack + the three emails, switchable on/off per account.
+      The three loops that make it self-running: <b>missed calls</b> retry up to 3 times · <b>booked meetings</b>
+      count against the capacity limit and <b>pause dialing when full</b> · the broker <b>marking a meeting closed</b>
+      frees a slot and <b>wakes the system back up</b>.</p>
+  </div>
+
+  <h2 class="subhead">Zoom-in detail on each step</h2>
+  <p>The same flow broken into pieces — handy for walking a client through one part at a time.</p>
+
+  <div class="card">
+    <h2><span class="num">0</span> The life of one lead</h2>
+    <div class="mermaid">
+    stateDiagram-v2
+      [*] --> new: scraped from Google Maps
+      new --> enriched: profile + name + timezone added
+      new --> disqualified: not a real broker
+      enriched --> scrubbed: passed opt-out (cleared to call)
+      enriched --> disqualified: on do-not-call list
+      scrubbed --> calling: picked up by dialer
+      calling --> booked: meeting set
+      calling --> not_interested: said no
+      calling --> no_answer: did not pick up
+      no_answer --> calling: retry (under 3 tries, +3 days)
+      no_answer --> [*]: exhausted after 3 tries → follow-up list
+      booked --> [*]
+      not_interested --> [*]
+      disqualified --> [*]
+    </div>
+    <p class="note">Every lead carries a status label and only moves forward. This single picture
+      is the whole engine — every diagram below is a close-up of one arrow here.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">1</span> The daily run</h2>
+    <div class="mermaid">
+    flowchart TD
+      Cron(["Daily run starts"]):::se --> Act{"Account active<br/>& billing OK?"}:::dec
+      Act -- No --> SkipA["Skip this account"]:::bad
+      Act -- Yes --> Now["Read account's<br/>calling rules"]:::act
+      Now --> Wknd{"Weekday?<br/>Mon–Fri"}:::dec
+      Wknd -- "No · weekend" --> StopDay["Stop — no calls today"]:::bad
+      Wknd -- Yes --> Hol{"Public holiday?"}:::dec
+      Hol -- Yes --> StopDay
+      Hol -- No --> Hours{"Inside calling hours?<br/>9am–6pm lead's local time"}:::dec
+      Hours -- No --> Wait["Wait — too early / late"]:::warn
+      Hours -- Yes --> Build(["Build today's call list →"]):::se
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef bad fill:#ffe4e6,stroke:#f43f5e,color:#9f1239;
+      classDef warn fill:#ffedd5,stroke:#fb923c,color:#7c2d12;
+    </div>
+    <p class="note">Holidays update themselves — the first run of each new year pulls a fresh US
+      holiday calendar automatically. No one ever maintains a list.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span> Choosing who to call today</h2>
+    <div class="mermaid">
+    flowchart TD
+      Start(["Daily limit: 40 calls"]):::se --> Retry["1 · Callbacks first<br/>missed calls now due<br/>up to 16 (40% of the day)"]:::act
+      Retry --> Overflow{"More than 16<br/>callbacks due?"}:::dec
+      Overflow -- Yes --> Roll["Extra callbacks move to tomorrow"]:::warn
+      Overflow -- No --> Fresh
+      Roll --> Fresh["2 · Fill the rest with<br/>fresh ready leads"]:::act
+      Fresh --> Low{"Still room AND<br/>running low on leads?"}:::dec
+      Low -- Yes --> Scr(["3 · Scrape new leads →"]):::se
+      Low -- No --> Dial["Call the list — spread<br/>across the day, max 40"]:::good
+      Scr --> Dial
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef bad fill:#ffe4e6,stroke:#f43f5e,color:#9f1239;
+      classDef warn fill:#ffedd5,stroke:#fb923c,color:#7c2d12;
+    </div>
+    <p class="note">Callbacks are capped at 16/day so older missed calls never crowd out fresh
+      prospects. Calls are spread through the day — better pickup, and safer for the phone number.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">3</span> After each call</h2>
+    <div class="mermaid">
+    flowchart TD
+      Result(["Call finishes"]):::se --> Out{"What happened?"}:::dec
+      Out -- "Meeting booked" --> Booked["Booked ✓<br/>calendar invite + instant alert"]:::good
+      Out -- "Not interested" --> NI["Closed — never called again"]:::bad
+      Out -- "No answer" --> Inc["Count the attempt"]:::act
+      Inc --> Three{"3rd missed call?"}:::dec
+      Three -- Yes --> Exh["Stop calling →<br/>moves to follow-up list"]:::warn
+      Three -- No --> Again["Try again in 3 days"]:::act
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef bad fill:#ffe4e6,stroke:#f43f5e,color:#9f1239;
+      classDef warn fill:#ffedd5,stroke:#fb923c,color:#7c2d12;
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span> Researching each lead (enrichment)</h2>
+    <div class="mermaid">
+    flowchart TD
+      New(["New lead"]):::se --> Rgx["Step 1 · Scan website for email · free"]:::act
+      Rgx --> LLM["Step 2 · AI reads the website<br/>name · profile · timezone · free"]:::act
+      LLM --> Thin{"Still missing info?"}:::dec
+      Thin -- Yes --> Tav["Step 3 · Web search · paid · rarely needed"]:::warn
+      Thin -- No --> ICP{"A real broker?"}:::dec
+      Tav --> ICP
+      ICP -- No --> DQ["Removed — never called or billed"]:::bad
+      ICP -- Yes --> Save["Saved with full profile ✓"]:::good
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef bad fill:#ffe4e6,stroke:#f43f5e,color:#9f1239;
+      classDef warn fill:#ffedd5,stroke:#fb923c,color:#7c2d12;
+    </div>
+    <p class="note">Each lead's timezone is read from its phone area code, so everyone is called in
+      their own local time — that's how one account can target many regions at once.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">5</span> Compliance check</h2>
+    <div class="mermaid">
+    flowchart TD
+      Enr(["Researched lead"]):::se --> Opt{"On the<br/>do-not-call list?"}:::dec
+      Opt -- Yes --> DQ["Removed"]:::bad
+      Opt -- No --> Scrub["Cleared to call ✓"]:::good
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef dec fill:#fef3c7,stroke:#f59e0b,color:#78350f;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+      classDef bad fill:#ffe4e6,stroke:#f43f5e,color:#9f1239;
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">6</span> Finding new leads (smart scraping)</h2>
+    <div class="mermaid">
+    flowchart TD
+      Need(["Need more leads"]):::se --> Log["Check what we've already searched"]:::act
+      Log --> Pick["Aim at NEW ground<br/>a new area or sub-term"]:::act
+      Pick --> Sweep["Search ALL sources at once<br/>Maps · Yelp · Yellow Pages · web · your list"]:::act
+      Sweep --> Dedup["Merge & skip anyone we already have"]:::act
+      Dedup --> SaveNew["Add the new businesses ✓"]:::good
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+    </div>
+    <p class="note">We pull from many sources at once — Google Maps, Yelp, Yellow Pages, the wider
+      web, and your own lists — then merge them into one clean list. We never search the same ground
+      twice, so we never pay to collect the same business again.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">7</span> Your follow-up list</h2>
+    <div class="mermaid">
+    flowchart LR
+      Loop(["Lead missed 3 calls"]):::se --> View{{"Follow-up list"}}:::good
+      View --> Out["name · phone · company<br/>times called · dates · what they do"]:::act
+      classDef se fill:#4f46e5,stroke:#4338ca,color:#ffffff;
+      classDef act fill:#f1f5f9,stroke:#94a3b8,color:#0f172a;
+      classDef good fill:#d1fae5,stroke:#10b981,color:#065f46;
+    </div>
+    <p class="note">When a lead doesn't pick up after 3 tries, it lands on a clean list — ready for
+      you to reach out by email or LinkedIn, completely separate from the calling system.</p>
+  </div>
+
+</main>
+<footer>Outreach.ai — automated outbound, end to end.</footer>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad:true, theme:"base", securityLevel:"loose",
+    flowchart:{ curve:"basis", nodeSpacing:48, rankSpacing:54, useMaxWidth:true },
+    themeVariables:{
+      fontFamily:'system-ui, "Segoe UI", Roboto, sans-serif', fontSize:"15px",
+      lineColor:"#94a3b8", primaryColor:"#eef2ff", primaryBorderColor:"#c7d2fe",
+      primaryTextColor:"#0f172a", tertiaryColor:"#f8fafc"
+    }
+  });
+</script>
+</body>
+</html>

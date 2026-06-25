@@ -1,0 +1,18 @@
+{
+  "name": "outreach-ai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "tsx scripts/seed-tenant0.ts",
+    "scrape": "tsx scripts/scrape-tenant0.ts",
+    "test": "tsx src/scrape.test.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

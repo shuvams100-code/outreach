@@ -126,7 +126,9 @@ engine.
 - Active / paused (our single master lever)
 - Pricing tier + **billing status** (via **Dodo Payments**) — paid keeps the account
   active; a failed or cancelled payment auto-pauses it
-- **Timezone + legal calling window** (per-account — critical once multiple states run at once)
+- **Legal calling window** (account sets the hours once, e.g. 9am–6pm Mon–Fri) — but it is
+  evaluated in **each lead's own timezone** (derived from the phone's area code), so a single
+  account can target many regions. See §13.
 - **Daily dial cap** — default **40 dials/day per phone number** (safely under the 50–75
   industry spam-flag threshold). It's a *per-number* safety rail: to scale volume, add
   another number (+40/day each), don't push one number harder. Note: spam risk is driven
@@ -335,3 +337,76 @@ The order follows the data, bottom-up. Each step is the input to the next.
 - **Bookings:** the most variable number — depends on script, offer, and list quality.
   Rough early gut-feel: ~5–15 booked meetings per ~140 conversations, improving as the
   script is tuned during tenant-0 testing.
+
+---
+
+## 13. Stage 2 engine — locked detail spec (the if/else rules)
+
+> Visual version of all of this: **[flow.html](flow.html)** (open in a browser — renders as flowcharts). This section
+> is the written source of truth; where it differs from earlier high-level lines, this wins.
+
+**State machine (now with `disqualified`):**
+`new → enriched → scrubbed → calling → booked / not_interested / no_answer`, plus a terminal
+`disqualified` (junk or opted-out — never dialed, never billed).
+
+**Enrichment chain (Stage 2.2)** — three rungs, stop when one works:
+1. **Regex** the website for an email — free.
+2. **Free LLM reads the website** → first/last name, a **detailed profile** (what they do, who
+   they serve, specialties, a talking angle), `is_broker`, and timezone — free. Model:
+   `gpt-oss-120b` primary, **DeepSeek V4** fallback (exact `:free` IDs confirmed at build).
+3. **Tavily web search** — **default final fallback**, only fires when the site is missing/thin.
+   Rare in practice, so the free 1,000/mo pool lasts; upgrade as tenant volume grows.
+- `is_broker = false` → `disqualified`. Else save profile + `state = enriched`.
+
+**Names:** capture first/last when the site names a person; otherwise the call greets the
+**business** and asks who it's speaking to live (greeting is a template on `first_message`).
+
+**Multi-region (per-lead timezone):** each lead's timezone is derived from its phone **area
+code** (free static map) and stored on `leads.timezone`. The account sets calling hours once;
+the engine checks them in **each lead's local time** → one account, many regions, no extra config.
+
+**Compliance gate (Stage 2.3):** `enriched → scrubbed` if the phone is **not** on the opt-out
+list (else `disqualified`). Weekend / US-federal-holiday / hours are checked at **dial time**,
+not here. Holidays come from **Nager.Date** (free, no key) cached in a `holidays` table that
+**auto-refreshes each new year** (fetch-on-first-miss). Weekends are computed from the date.
+
+**Daily run + dialing (Stage 2.5/2.7):** for each active account, in its calling rules' time:
+stop on weekend / holiday / outside-hours. Then fill the **40-dial cap** in order —
+(1) retries due (`no_answer`, tries<3, due now) capped at **40% = 16/day** (overflow rolls to
+tomorrow); (2) ready `scrubbed` leads for the remainder; (3) only if still short **and** below
+`refill_threshold`, scrape fresh ground. Dials are **spread across the working day**, not bursted.
+
+**Retry policy:** 3 attempts, flat **3-day** gap. After 3 → exhausted (stays `no_answer`,
+drops out of the queue, appears in the follow-up list). Stored in `accounts.retry_rules` =
+`{ max_attempts: 3, gap_days: 3, max_share_of_daily_cap: 0.40 }`.
+
+**Scraping (Stage 2.5/2.7) — multi-source from line one:** a single coordinated run per area
+**fans out to all enabled sources in parallel** (Google Maps base, Yelp, Yellow Pages, web-search;
++ customer CSV; LinkedIn optional enrichment-only; social excluded — no phones), normalizes each to
+the common lead shape, **merges and dedupes by phone**, tags `leads.source`. Scrape the **full
+sweep** of an area (not 50) up to `lead_cap_per_run` (default **500**); the 40/day is only the
+*dial* cap. Each source bills for its own results, so the **source set is a per-account setting**
+(`accounts.sources` jsonb — budget tenant = Maps only, premium = all); dedupe means research +
+calling are paid **once per unique business**. No source has an exclusion list, so **`scrape_runs`**
+logs every mined (source + term + area) and the engine always aims at fresh ground; post-scrape
+phone-dedupe is the backstop so the DB never bloats.
+
+**Client type & ingestion (B2B vs B2C):** onboarding asks the client's business name, then **who
+their customers are** → `accounts.customer_type` (b2b | b2c). **B2B** (targets businesses) →
+scraping + CSV both available (toggle). **B2C** (targets the general public) → scraping **OFF** by
+default, **CSV upload only** — the public can't be scraped, and AI-voice consumer calling needs
+**prior written consent** (TCPA + national Do-Not-Call; FCC 2024 covers AI voices). B2C brokers
+bring consented lists (CRM / opt-in web-form / purchased opt-in). **Source-agnostic ingestion:**
+scraped or uploaded, every lead runs through one normalization step (→ standard lead shape, dedupe
+by phone, save as `new`), so the pipeline downstream is identical. **DNC scrubbing + consent
+tracking** join the compliance gate (§2.3) once any B2C account exists.
+
+**Manual follow-up:** a `manual_followup` **view** (`state=no_answer AND retry_count>=3`) joining
+`leads` + `calls` → first/last name, phone, company, times called, call dates, business profile.
+Read/export it for offline email/LinkedIn; fully separate from the calling system.
+
+**New Supabase objects for Stage 2:** `disqualified` enum value · `holidays` table ·
+`scrape_runs` table (with a `source` column) · `manual_followup` view · `leads.timezone` column ·
+`accounts.sources` jsonb (multi-source list, replaces single `apify_actor`) ·
+`accounts.customer_type` (b2b/b2c — drives scraping default) · populate tenant-0
+`retry_rules` + `lead_cap_per_run`.
