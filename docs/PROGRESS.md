@@ -2,7 +2,7 @@
 
 > Living log. Every session: append what was done + any decision.
 > Task boxes: `[ ]` todo · `[~]` in progress · `[x]` done.
-> Full design = `outreach-ai-build-plan.md`. This file tracks *execution*.
+> Full design = `build-plan.md` (same folder). This file tracks *execution*.
 
 **Where we are:** Step 1 done ✅ · Step 2 (engine) planned, building next.
 
@@ -50,7 +50,7 @@
 ---
 
 ## Decision log
-Full reasoning lives in `outreach-ai-build-plan.md`; this is the index.
+Full reasoning lives in `build-plan.md`; this is the index.
 
 - **2026-06-25 — Stack/scope locked:** Tavily for enrichment · VAPI built-in Groq model for the live call · free OpenRouter model for background enrichment · Dodo Payments for billing (paid = active switch) · full version (not MVP).
 - **2026-06-25 — Phone:** VAPI native US numbers, **no Twilio** (one bill; Twilio only a later fallback).
