@@ -10,9 +10,66 @@
 
 ## Current state (2026-06-26)
 
-Phase 1 is ~85% done. Built & tested: outbound engine, CSV upload, calendar + booking, live mid-call booking tools + server, Slack alert, and **inbound answering** (the number now answers with the agent). What's left is mostly the **Vercel deploy** — it's the single step that unlocks the deferred pieces at once: live web-test of booking, the public tools URL (so booking works on real in/outbound calls), the end-of-call webhook (saves call transcripts), the daily cron, and the reminder-call sweep. Plus the still-to-build **reminder call** logic.
+**The engine is built and unit-tested (32 tests passing). It has never made a live paid call.** Done:
+outbound calling engine, CSV upload, multi-source scraping (3 sources) + enrich + scrub, calendar +
+live mid-call booking tools + server, inbound answering, Slack alert, reminder-call sweep, per-lead
+agent context, per-account ICP. What stands between here and revenue is **deploy + go-live + the
+expansion tools** — see the pending list below.
 
-**Phase 2 (scraping, web-form) has not started.**
+---
+
+## ⏳ WHAT'S LEFT (the authoritative pending list)
+
+> Frontend, dashboards, and wiring are known and listed in §E. Everything else, grouped by purpose.
+
+### A. Go-live critical path — between "works in tests" and "a real paid booking"
+1. **Vercel deploy** — permanent public URL for the tools server + webhooks. *Keystone; unlocks most below.*
+2. **Vercel Cron** — run the daily calling run + reminder sweep automatically (today: manual `npm run …`).
+3. **End-of-call webhook** — save each call's transcript/recording/outcome to `calls` when it ends (esp. inbound). The *booking* already saves; the call record doesn't.
+4. **Live call test** — prove one real call books a real meeting. Never done (US number can't dial India; gated on deploy / a US-side number).
+5. **Billing (Dodo)** — paid → `accounts.status=active`. *First client can be invoiced by hand; not a launch blocker.*
+
+### B. Phase-1 logic gaps — small, close before scaling
+6. ✅ **US holiday skip** — `src/daily.ts` `isUsFederalHoliday()` (11 federal holidays, rule-based, unit-tested) now also gates `isWithinCallingWindow`.
+7. ✅ **Booking capacity throttle** — `src/daily.ts` `atCapacity()` + `runDailyAccount` counts open bookings and pauses dialing at the ceiling (`accounts.booking_capacity`).
+8. **Reminder call confirm/reschedule** — on "move it," cancel + replace the old booking (agent can confirm today; rebook-cancel not handled). *(still pending)*
+9. **No-show / won-lost marking** — `bookings.outcome`/`status` columns exist; the action ties to the dashboard. *(still pending)*
+
+### C. The "endings" + presets — the MULTIDIMENSIONAL expansion (full map → `use-cases.md`)
+Turns the agent from *booking-only* into the whole service menu. Each ending tool is ~Small (same
+pattern as the live-booking tools `check_availability`/`book_appointment`).
+
+| Ending tool | Unlocks (sellable services) | Status |
+|---|---|---|
+| `capture_fields` (save structured answers) | Lead Qualification · Surveys · Recruitment Screening · Market Research | ✅ **Built + proven end-to-end** (`src/tools.ts` `handleCaptureFields`; saves to `leads.captured_data`; smoke-tested via the server against a real lead). |
+| `take_message` | AI Receptionist · After-hours answering | ❌ next |
+| `transfer_to_human` (warm transfer) | Receptionist · Live support · High-intent sales | ❌ |
+| `answer_from_kb` (knowledge base) | Tier-1 Support · FAQ deflection | ❌ |
+| `send_link` (SMS/email a link) | Review Generation · Payment reminders · Info send | ❌ |
+| `log_ticket` | Complaint Intake · Helpdesk | ❌ |
+
+**Per-account endings now exist:** `accounts.enabled_tools` (text[]) lists which tools an account's agent
+gets; `src/tools.ts` `toolDefs()` is the registry; `sync-tools` attaches only the enabled subset. A preset
+will later set `enabled_tools` (Sales → booking pair, Qualifier → `capture_fields`, …). This is the
+foundation for the preset layer (item 10).
+
+**Build order:** ✅ `capture_fields` done → `take_message` + `transfer_to_human` next (unlocks the Receptionist product, the cleanest/lowest-risk thing to sell). Then the rest.
+
+Plus:
+10. **Use-case preset layer** — one-click onboarding bundles (Sales / Receptionist / Qualifier / …) that auto-fill an account's settings + which endings are enabled. (Vision: [[project-usecase-presets]].) *(still pending — `enabled_tools` foundation done)*
+11. ✅ **ICP → search terms** — `src/icp.ts` `deriveSearchTerm()`; `scrapeAccount` derives + saves the search term from `icp_description` when none is set. So onboarding = write ICP + toggle sources.
+12. ✅ **Knowledge base into the agent** — `src/call.ts` `buildCallOverrides()` injects `broker_knowledge_base` so the agent can answer FAQs about the client's business (outbound via per-call override; inbound baked into the saved assistant via `make-test-assistant`). This is the "answer_from_kb" capability — no separate tool needed.
+
+### D. Phase-2 input pipes
+13. ✅ **Web-form capture** — `src/webform.ts` + `POST /webhook/leads/<token>` on the server. Each account has an unguessable `webhook_token`; the client points their form at that URL; submissions become deduped leads. Proven end-to-end. *(Instant-call-on-submit "speed-to-lead" is a deploy-time add.)*
+14. ✅ **Lead-list export** — `src/export.ts` `toCsv()` + `exportLeads()`; `npm run export [-- <state>]` → `leads-export.csv`.
+
+### E. Frontend / access (known)
+14. **Auth + RLS policies** — Supabase Auth login per client; RLS scopes every query to their `account_id` (schema already carries `account_id` everywhere).
+15. **Client dashboard** — leads, calls, open bookings, mark-closed.
+16. **Internal ops dashboard** — all accounts, usage, call logs, errors.
+
+> **Minimum to the FIRST paying client:** A1–A4 (deploy → cron → transcript-save → one live booking) + onboard/invoice that client by hand. Everything in B/C/D/E makes it bigger and more automated.
 
 ---
 
@@ -155,18 +212,21 @@ src/
   lib/supabase.ts       — service-role Supabase client
   calendar.ts           — getBusy, computeFreeSlots, createEvent
   booking.ts            — getAvailableSlots, bookSlot
-  tools.ts              — VAPI live-booking tools: parseToolCalls, handleCheckAvailability, handleBookAppointment
+  tools.ts              — VAPI tools: parse/resolve, check_availability, book_appointment, capture_fields, toolDefs registry
   server.ts             — HTTP server exposing POST /vapi/tools (the live-booking endpoint)
   notify.ts             — Slack alert on booking (no email by design)
   reminders.ts          — reminder-call sweep: selectDueReminders (pure), runReminderSweep
-  call.ts               — placeCall, pollCall, callContact
-  daily.ts              — runDailyAccount, selectCallList, isWithinCallingWindow
+  call.ts               — placeCall, pollCall, callContact, buildCallOverrides (knowledge base + lead context)
+  daily.ts              — runDailyAccount, selectCallList, isWithinCallingWindow, isUsFederalHoliday, atCapacity
+  icp.ts                — deriveSearchTerm (ICP text → scrape search query)
+  webform.ts            — mapWebformLead, handleWebform (web-form capture)
+  export.ts             — toCsv, exportLeads (lead-list export)
   outcome.ts            — classifyCall, isAnswered (pure, unit-tested)
   upload.ts             — parseCsv, normalizePhone, selectUploadLeads (pure, unit-tested)
   enrich.ts             — enrichLead, timezoneFromPhone, extractEmail
   compliance.ts         — isBlockedPhone, scrubAccount
-  scrape.ts             — scraping skeleton (Phase 2, not integrated)
-  *.test.ts             — 17 tests, all passing
+  scrape.ts             — multi-source registry (google_maps/yellow_pages/hotfrog), selectNewLeads, dedup
+  *.test.ts             — 32 tests, all passing
 
 scripts/
   seed-tenant0.ts       — upsert tenant-0 account row
@@ -183,7 +243,7 @@ scripts/
   probe-source.ts       — cheap 3-record probe of any source to confirm output fields (npm run probe-source -- <key>)
 ```
 
-**All tests pass:** `npm test` runs unit tests across outcome, upload, compliance, daily, calendar, enrich, scrape, tools, notify.
+**All tests pass:** `npm test` runs 40 unit tests across outcome, upload, compliance, daily, calendar, enrich, scrape, tools, notify, reminders, call, webform, export.
 
 ---
 
@@ -191,7 +251,7 @@ scripts/
 
 5 tables, all with `account_id`, RLS on:
 - `accounts` — all per-client config
-- `leads` — contacts + state machine (new → enriched → scrubbed → calling → booked/not_interested/no_answer/disqualified)
+- `leads` — contacts + state machine (new → enriched → scrubbed → calling → booked/not_interested/no_answer/disqualified). `captured_data` jsonb holds answers from `capture_fields` (qualification/surveys).
 - `calls` — one row per call attempt
 - `opt_outs` — DNC list
 - `bookings` — schema exists; **write path built** — `src/tools.ts` `handleBookAppointment` inserts a row (status `open`) when the agent books live during a call
@@ -209,9 +269,7 @@ scripts/
 
 | Item | Why deferred | When to add |
 |---|---|---|
-| US federal holiday check in calling window | Not critical for first test; Nager.Date API is free and easy to wire | Before going live with real clients |
-| Weekend rollover on retry date | `gap_days` math doesn't yet skip weekends/holidays | Before going live |
-| Booking capacity throttle | No real clients yet; `booking_capacity` column exists | When first client signs up |
+| Weekend/holiday rollover on **retry date** | `gap_days` math doesn't yet skip weekends/holidays (the calling-window holiday check IS done — this is the separate retry-scheduling shift) | Before going live |
 | Voicemail drop | VAPI already handles `did-not-give`; custom voicemail drop not needed yet | If clients want branded voicemail messages |
 | Consent tracking for B2C | No B2C clients yet | Before any B2C account goes active |
 | Script refinement | Deferred to a dedicated session after core machinery is done | After 1c + 1d are built |
@@ -220,11 +278,11 @@ scripts/
 
 ## Decisions made (locked)
 
-- **Stack:** Node.js + TypeScript + tsx · Supabase · Vercel + Vercel Cron · VAPI (in + out) · Google Calendar API · Resend (email) · Slack (internal alerts) · Dodo Payments (billing)
+- **Stack:** Node.js + TypeScript + tsx · Supabase · Vercel + Vercel Cron · VAPI (in + out) · Google Calendar API · Slack (internal alerts) · Dodo Payments (billing). **Email dropped** — Google Calendar's native reminders replace it.
 - **Per-account everything:** script, voice, ICP, exclusions, caps, calendar — all in `accounts` row. Zero per-client code.
 - **Static Meet link:** Google can't mint Meet links via API on consumer Gmail (Workspace-only). Static room link stored in `accounts.booking.meeting_link`.
 - **LLM for enrichment:** OpenRouter `openai/gpt-oss-120b:free` + `openai/gpt-oss-20b:free`. Old llama/deepseek IDs were wrong (429/404).
-- **Scraping source (Phase 2):** Apify `trudax/yellow-pages-us-scraper` for Yellow Pages US.
+- **Scraping sources:** universal 3-source set (same for every client, toggled in `sources`): Google Maps (`compass~crawler-google-places`), Yellow Pages (`trudax~yellow-pages-us-scraper`), Hotfrog (`crawlerbros~hotfrog-scraper`). All probe-confirmed. Manta rejected (category-enum, not searchable).
 - **Retry rules:** 3 attempts max, 3-day gap, retries capped at 40% of daily dial cap.
 - **No auto-close on bookings:** client must mark meetings closed manually. Forcing function to stay engaged.
 - **Product name:** Reacher AI (not Outreach.ai).

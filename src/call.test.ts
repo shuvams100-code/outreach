@@ -1,24 +1,31 @@
 import assert from "node:assert/strict";
-import { buildContextOverride } from "./call";
+import { buildCallOverrides } from "./call";
 
-const baseAssistant = { model: { provider: "openai", model: "gpt-4o-mini", messages: [{ role: "system", content: "base script" }] } };
+const base = { model: { provider: "openai", model: "gpt-4o-mini", messages: [{ role: "system", content: "base script" }] } };
 
-// no profile → no override (agent just uses its normal script)
-assert.equal(buildContextOverride(baseAssistant, "Acme", null), undefined);
-console.log("buildContextOverride no profile: ok");
+// nothing to add → no override (agent uses its normal script)
+assert.equal(buildCallOverrides(base, {}), undefined);
+assert.equal(buildCallOverrides(base, { profile: null, knowledgeBase: "" }), undefined);
+console.log("buildCallOverrides none: ok");
 
-// profile present → appends a context system message, preserves provider/model + base messages
-const ov = buildContextOverride(baseAssistant, "Acme Insurance", "They sell commercial auto policies to trucking fleets.") as any;
+// lead profile only → one appended system message, base preserved
+let ov = buildCallOverrides(base, { businessName: "Acme Insurance", profile: "They sell commercial auto to trucking fleets." }) as any;
 assert.equal(ov.model.provider, "openai");
-assert.equal(ov.model.model, "gpt-4o-mini");
 assert.equal(ov.model.messages.length, 2);
-assert.equal(ov.model.messages[0].content, "base script");        // base kept
+assert.equal(ov.model.messages[0].content, "base script");
 assert.ok(ov.model.messages[1].content.includes("Acme Insurance"));
 assert.ok(ov.model.messages[1].content.includes("trucking fleets"));
-console.log("buildContextOverride with profile: ok");
+console.log("buildCallOverrides profile: ok");
 
-// tolerates an assistant with no model/messages
-const ov2 = buildContextOverride(null, "X Corp", "profile text") as any;
-assert.equal(ov2.model.messages.length, 1);
-assert.ok(ov2.model.messages[0].content.includes("X Corp"));
-console.log("buildContextOverride empty assistant: ok");
+// knowledge base + profile → two appended messages (KB first, then lead context)
+ov = buildCallOverrides(base, { knowledgeBase: "We install solar panels. Free quotes. 25-year warranty.", businessName: "X", profile: "Homeowner in Austin." }) as any;
+assert.equal(ov.model.messages.length, 3);
+assert.ok(ov.model.messages[1].content.includes("solar panels"));      // KB
+assert.ok(ov.model.messages[2].content.includes("Homeowner in Austin")); // lead context
+console.log("buildCallOverrides knowledge base + profile: ok");
+
+// knowledge base only, tolerates assistant with no model/messages
+ov = buildCallOverrides(null, { knowledgeBase: "FAQ stuff" }) as any;
+assert.equal(ov.model.messages.length, 1);
+assert.ok(ov.model.messages[0].content.includes("FAQ stuff"));
+console.log("buildCallOverrides knowledge base only: ok");

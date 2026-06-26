@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parseToolCalls, resolveAccountId, toolResponse } from "./tools";
+import { parseToolCalls, resolveAccountId, toolResponse, normalizeCapture } from "./tools";
 
 // --- parseToolCalls: arguments as an object + outbound metadata ---
 let p = parseToolCalls({
@@ -47,6 +47,21 @@ process.env.DEFAULT_ACCOUNT_ID = "dev-default";
 assert.equal(await resolveAccountId({ accountIdHint: null, phoneNumberId: null }), "dev-default");
 if (saved === undefined) delete process.env.DEFAULT_ACCOUNT_ID; else process.env.DEFAULT_ACCOUNT_ID = saved;
 console.log("resolveAccountId default/refuse: ok");
+
+// --- normalizeCapture: full payload ---
+let c = normalizeCapture({ fields: { budget: "50k", timeline: "Q3" }, qualified: true, notes: "  keen  " });
+assert.deepEqual(c.fields, { budget: "50k", timeline: "Q3" });
+assert.equal(c.qualified, true);
+assert.equal(c.notes, "keen");
+// missing/blank bits → safe defaults, qualified stays null when not a boolean
+c = normalizeCapture({ qualified: "yes" });
+assert.deepEqual(c.fields, {});
+assert.equal(c.qualified, null);
+assert.equal(c.notes, null);
+// qualified:false preserved (not treated as missing)
+assert.equal(normalizeCapture({ fields: {}, qualified: false }).qualified, false);
+assert.deepEqual(normalizeCapture(null).fields, {});
+console.log("normalizeCapture: ok");
 
 // --- toolResponse envelope ---
 assert.deepEqual(

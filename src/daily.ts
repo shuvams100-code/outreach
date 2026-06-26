@@ -23,10 +23,39 @@ export function selectCallList(
   return { list, retries: retries.length, fresh: fresh.length, retryOverflow, capLeft: cap - list.length };
 }
 
+// ---------- pure: US federal holidays (rule-based, no external API) ----------
+
+const dow = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+// Day-of-month of the nth `weekday` in a month (e.g. 3rd Monday). weekday: 0=Sun..6=Sat.
+const nthWeekday = (y: number, m: number, weekday: number, n: number) => {
+  const offset = (weekday - dow(y, m, 1) + 7) % 7;
+  return 1 + offset + (n - 1) * 7;
+};
+const lastWeekday = (y: number, m: number, weekday: number) => {
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return days - ((dow(y, m, days) - weekday + 7) % 7);
+};
+
+// The 11 US federal holidays (month is 1-12). Observed-day shifting (Sat→Fri/Sun→Mon) is left out —
+// ponytail: businesses care about the actual day; add observed shift if a client needs it.
+export function isUsFederalHoliday(y: number, m: number, d: number): boolean {
+  if (m === 1 && d === 1) return true;                       // New Year's
+  if (m === 6 && d === 19) return true;                      // Juneteenth
+  if (m === 7 && d === 4) return true;                       // Independence Day
+  if (m === 11 && d === 11) return true;                     // Veterans Day
+  if (m === 12 && d === 25) return true;                     // Christmas
+  if (m === 1 && d === nthWeekday(y, 1, 1, 3)) return true;  // MLK Day — 3rd Mon Jan
+  if (m === 2 && d === nthWeekday(y, 2, 1, 3)) return true;  // Presidents' Day — 3rd Mon Feb
+  if (m === 5 && d === lastWeekday(y, 5, 1)) return true;    // Memorial Day — last Mon May
+  if (m === 9 && d === nthWeekday(y, 9, 1, 1)) return true;  // Labor Day — 1st Mon Sep
+  if (m === 10 && d === nthWeekday(y, 10, 1, 2)) return true;// Columbus Day — 2nd Mon Oct
+  if (m === 11 && d === nthWeekday(y, 11, 4, 4)) return true;// Thanksgiving — 4th Thu Nov
+  return false;
+}
+
 // ---------- pure: is it a legal moment to call THIS lead (their local time)? ----------
 
-// Mon–Fri and within [startHour, endHour) in the lead's own timezone.
-// ponytail: US federal holidays not checked here yet — add the holidays table at the compliance step.
+// Mon–Fri, not a US federal holiday, and within [startHour, endHour) in the lead's own timezone.
 export function isWithinCallingWindow(
   timezone: string | null | undefined,
   startHour: number,
@@ -39,11 +68,23 @@ export function isWithinCallingWindow(
     weekday: "short",
     hour: "2-digit",
     hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(now);
-  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
-  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
-  const isWeekday = !["Sat", "Sun"].includes(weekday);
-  return isWeekday && hour >= startHour && hour < endHour;
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const weekday = get("weekday");
+  if (["Sat", "Sun"].includes(weekday)) return false;
+  if (isUsFederalHoliday(+get("year"), +get("month"), +get("day"))) return false;
+  const hour = parseInt(get("hour") || "0", 10);
+  return hour >= startHour && hour < endHour;
+}
+
+// ---------- pure: booking capacity throttle ----------
+
+// True when the account is at/over its open-booking ceiling → outbound dialing should pause.
+export function atCapacity(openBookings: number, capacity: number | null | undefined): boolean {
+  return capacity != null && openBookings >= capacity;
 }
 
 // ---------- orchestrator: run the daily outbound cycle for one account ----------
@@ -55,13 +96,21 @@ const hourOf = (t: string | null | undefined, fallback: number) =>
 export async function runDailyAccount(accountId: string, now: Date = new Date()) {
   const { data: acct, error } = await supabase
     .from("accounts")
-    .select("status, daily_dial_cap, retry_rules, calling_hours_start, calling_hours_end")
+    .select("status, daily_dial_cap, retry_rules, calling_hours_start, calling_hours_end, booking_capacity")
     .eq("id", accountId)
     .single();
   if (error || !acct) throw new Error(`Account ${accountId} not found: ${error?.message}`);
   if (acct.status !== "active") return { skipped: "account not active" as const };
 
-  // ponytail: capacity throttle (open bookings vs booking_capacity) goes here once bookings exist (1c).
+  // Capacity throttle: if open bookings already meet the client's ceiling, stop producing more.
+  const { count: openBookings } = await supabase
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", accountId)
+    .eq("status", "open");
+  if (atCapacity(openBookings ?? 0, acct.booking_capacity)) {
+    return { skipped: "at booking capacity" as const, openBookings: openBookings ?? 0, capacity: acct.booking_capacity };
+  }
 
   const rules = (acct.retry_rules as RetryRules) ?? { max_attempts: 3, gap_days: 3 };
   const cap = acct.daily_dial_cap ?? 40;

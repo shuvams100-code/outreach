@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 if (existsSync(".env")) process.loadEnvFile(".env");
 import { createServer } from "node:http";
 import { handleToolCalls } from "./tools";
+import { handleWebform } from "./webform";
 
 // Public HTTP surface VAPI reaches during a live call. One endpoint dispatches both tools.
 // ponytail: stdlib http, no framework — one POST route doesn't need Express.
@@ -11,6 +12,26 @@ const server = createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("ok");
+    return;
+  }
+
+  // Web-form capture: a client's form POSTs a submission to /webhook/leads/<their-token>.
+  if (req.method === "POST" && req.url?.startsWith("/webhook/leads/")) {
+    const token = req.url.slice("/webhook/leads/".length).split(/[/?]/)[0];
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", async () => {
+      try {
+        const body = raw ? JSON.parse(raw) : {};
+        const result = await handleWebform(token, body);
+        console.log("web-form →", JSON.stringify(result));
+        res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+      } catch (e: any) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, reason: `bad request: ${e?.message ?? e}` }));
+      }
+    });
     return;
   }
 

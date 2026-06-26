@@ -16,7 +16,7 @@
 ## The "ending tools" that unlock everything else (build once, reuse across many services)
 | Ending tool | Unlocks |
 |---|---|
-| `capture_fields` (save structured answers) | qualification, surveys, research, screening, intake |
+| `capture_fields` (save structured answers) — ✅ **BUILT** | qualification, surveys, research, screening, intake |
 | `take_message` | receptionist, after-hours |
 | `transfer_to_human` (warm transfer) | receptionist, support, high-intent sales |
 | `answer_from_kb` (knowledge base) | FAQ deflection, Tier-1 support |

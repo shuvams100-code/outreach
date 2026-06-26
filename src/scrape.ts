@@ -1,6 +1,7 @@
 import { supabase } from "./lib/supabase";
 import { normalizePhone } from "./upload";
 import { timezoneFromPhone } from "./enrich";
+import { deriveSearchTerm } from "./icp";
 
 // Multi-source lead scraping. Each source is one Apify actor + a small adapter (how to call it).
 // The engine runs whatever the account has toggled on in `sources` and dedupes across all of them
@@ -131,10 +132,20 @@ export async function scrapeAccount(accountId: string, maxItems?: number) {
 
   const { data: acct, error: acctErr } = await supabase
     .from("accounts")
-    .select("search_query, geo_city, geo_state, lead_cap_per_run, sources")
+    .select("search_query, geo_city, geo_state, lead_cap_per_run, sources, icp_description")
     .eq("id", accountId)
     .single();
   if (acctErr || !acct) throw new Error(`Account ${accountId} not found: ${acctErr?.message}`);
+
+  // No search term set but an ICP is? Derive the term from the ICP and save it (one-time per account).
+  if (!acct.search_query && acct.icp_description) {
+    const term = await deriveSearchTerm(acct.icp_description);
+    if (term) {
+      acct.search_query = term;
+      await supabase.from("accounts").update({ search_query: term }).eq("id", accountId);
+    }
+  }
+  if (!acct.search_query) throw new Error("Account has no search_query and none could be derived from icp_description");
 
   const enabled = ((acct.sources as { key: string; enabled?: boolean }[]) ?? [])
     .filter((s) => s.enabled !== false)

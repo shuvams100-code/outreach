@@ -112,6 +112,93 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
   return `Booked for ${r.label}. Confirm the day and time with the prospect and let them know the invite + link is on the way.`;
 }
 
+// ---- ending tool: capture_fields (qualification / surveys / screening / research) ----
+
+// Pure (unit-tested): normalize whatever the agent passes into a clean payload to store.
+export function normalizeCapture(args: any): { fields: Record<string, unknown>; qualified: boolean | null; notes: string | null } {
+  const fields = args && typeof args.fields === "object" && args.fields !== null ? (args.fields as Record<string, unknown>) : {};
+  const qualified = typeof args?.qualified === "boolean" ? args.qualified : null;
+  const notes = typeof args?.notes === "string" && args.notes.trim() ? args.notes.trim() : null;
+  return { fields, qualified, notes };
+}
+
+// Save the answers the agent collected onto the lead. The account's prompt lists WHAT to ask
+// (its qualifying questions); this tool just stores whatever came back — so the same tool serves
+// qualification, surveys, screening, and research without per-use-case code.
+export async function handleCaptureFields(args: any, ctx: CallContext): Promise<string> {
+  const { fields, qualified, notes } = normalizeCapture(args);
+  if (!ctx.leadId) return "Noted — but there's no lead record on this call to attach the answers to. Keep going.";
+
+  const payload = {
+    ...fields,
+    ...(qualified !== null ? { qualified } : {}),
+    ...(notes ? { notes } : {}),
+    captured_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from("leads")
+    .update({ captured_data: payload })
+    .eq("id", ctx.leadId)
+    .eq("account_id", ctx.accountId);
+  if (error) return `Couldn't save the answers (${error.message}). Continue the conversation; it can be retried.`;
+
+  return qualified === false ? "Saved — marked as not a fit." : "Got it, saved the details.";
+}
+
+// ---- tool definitions for VAPI (attached per-account by sync-tools, filtered to enabled_tools) ----
+
+// The agent's available "endings". An account enables the subset its use case needs:
+// Sales → check_availability + book_appointment · Qualifier/Survey → capture_fields · etc.
+export function toolDefs(url: string): Record<string, any> {
+  return {
+    check_availability: {
+      type: "function",
+      function: {
+        name: "check_availability",
+        description: "Get open meeting slots to offer the prospect. Call this the moment the prospect agrees to a meeting, before booking.",
+        parameters: { type: "object", properties: {}, required: [] },
+      },
+      server: { url },
+    },
+    book_appointment: {
+      type: "function",
+      function: {
+        name: "book_appointment",
+        description: "Book one slot on the calendar. Pass the exact `start` value from check_availability plus the prospect's details. Only call after check_availability.",
+        parameters: {
+          type: "object",
+          properties: {
+            start: { type: "string", description: "ISO start datetime of the chosen slot, copied exactly from check_availability" },
+            name: { type: "string", description: "Prospect's name" },
+            company: { type: "string", description: "Prospect's company" },
+            phone: { type: "string", description: "Prospect's phone number" },
+            notes: { type: "string", description: "Anything useful for the meeting" },
+          },
+          required: ["start"],
+        },
+      },
+      server: { url },
+    },
+    capture_fields: {
+      type: "function",
+      function: {
+        name: "capture_fields",
+        description: "Save the answers/details you collected from the prospect (qualification, survey, screening, research). Call this once you've gathered them.",
+        parameters: {
+          type: "object",
+          properties: {
+            fields: { type: "object", description: 'The answers you collected as key/value pairs, e.g. {"budget":"50k","timeline":"Q3","decision_maker":"yes"}' },
+            qualified: { type: "boolean", description: "Whether the prospect fits the account's criteria (true/false)" },
+            notes: { type: "string", description: "Anything else worth recording" },
+          },
+          required: ["fields"],
+        },
+      },
+      server: { url },
+    },
+  };
+}
+
 // ---- dispatcher (server.ts calls this) ----
 
 export async function handleToolCalls(body: any): Promise<{ results: { toolCallId: string; result: string }[] }> {
@@ -122,9 +209,10 @@ export async function handleToolCalls(body: any): Promise<{ results: { toolCallI
   for (const c of p.calls) {
     let result: string;
     try {
-      if (!accountId) result = "Could not identify which account this call is for — cannot check availability or book. Apologize and flag for support.";
+      if (!accountId) result = "Could not identify which account this call is for — cannot run this action. Apologize and flag for support.";
       else if (c.name === "check_availability") result = await handleCheckAvailability(accountId);
       else if (c.name === "book_appointment") result = await handleBookAppointment(c.args, ctx);
+      else if (c.name === "capture_fields") result = await handleCaptureFields(c.args, ctx);
       else result = `Unknown tool: ${c.name}`;
     } catch (e: any) {
       result = `Tool error: ${e?.message ?? e}`;

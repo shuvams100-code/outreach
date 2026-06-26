@@ -19,7 +19,9 @@
     "sync-tools": "tsx scripts/sync-tools.ts",
     "setup-inbound": "tsx scripts/setup-inbound.ts",
     "reminders": "tsx scripts/run-reminders.ts",
-    "test": "tsx src/scrape.test.ts && tsx src/enrich.test.ts && tsx src/compliance.test.ts && tsx src/upload.test.ts && tsx src/outcome.test.ts && tsx src/daily.test.ts && tsx src/calendar.test.ts && tsx src/tools.test.ts && tsx src/notify.test.ts && tsx src/reminders.test.ts && tsx src/call.test.ts"
+    "export": "tsx scripts/export-leads.ts",
+    "preset": "tsx scripts/apply-preset.ts",
+    "test": "tsx src/scrape.test.ts && tsx src/enrich.test.ts && tsx src/compliance.test.ts && tsx src/upload.test.ts && tsx src/outcome.test.ts && tsx src/daily.test.ts && tsx src/calendar.test.ts && tsx src/tools.test.ts && tsx src/notify.test.ts && tsx src/reminders.test.ts && tsx src/call.test.ts && tsx src/webform.test.ts && tsx src/export.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",

@@ -10,25 +10,33 @@ export type CallAccount = {
   vapi_assistant: Record<string, unknown> | null;
 };
 
-// Per-call context injection: append what we researched about THIS lead as an extra system message,
-// so the agent walks into the call already knowing who it's talking to. Returns undefined when there's
-// no profile (agent just uses its normal script). Pure + unit-tested; works for any account's assistant.
-export function buildContextOverride(
+// Append extra system messages to an assistant for one call: the account's knowledge base (so the
+// agent can answer questions about the client's business) and per-lead research (so it knows who it's
+// calling). Returns undefined when there's nothing to add. Pure + unit-tested; any account's assistant.
+export function buildCallOverrides(
   assistant: Record<string, any> | null,
-  businessName: string | null,
-  profile: string | null,
+  opts: { knowledgeBase?: string | null; businessName?: string | null; profile?: string | null },
 ): Record<string, unknown> | undefined {
-  if (!profile) return undefined;
+  const extra: { role: string; content: string }[] = [];
+  if (opts.knowledgeBase?.trim()) {
+    extra.push({
+      role: "system",
+      content: `ABOUT THE BUSINESS YOU REPRESENT (use this to answer questions accurately): ${opts.knowledgeBase.trim()}`,
+    });
+  }
+  if (opts.profile?.trim()) {
+    extra.push({
+      role: "system",
+      content:
+        `CONTEXT FOR THIS CALL — you are calling ${opts.businessName || "this business"}. ` +
+        `Here is what we researched about them: ${opts.profile.trim()} ` +
+        `Use this naturally to be specific and relevant. Do NOT read it aloud or mention that you researched them.`,
+    });
+  }
+  if (!extra.length) return undefined;
   const baseModel = (assistant?.model as Record<string, any>) ?? {};
   const baseMessages = Array.isArray(baseModel.messages) ? baseModel.messages : [];
-  const contextMsg = {
-    role: "system",
-    content:
-      `CONTEXT FOR THIS CALL — you are calling ${businessName || "this business"}. ` +
-      `Here is what we researched about them: ${profile} ` +
-      `Use this naturally to be specific and relevant. Do NOT read it aloud or mention that you researched them.`,
-  };
-  return { model: { ...baseModel, messages: [...baseMessages, contextMsg] } };
+  return { model: { ...baseModel, messages: [...baseMessages, ...extra] } };
 }
 
 export async function loadCallAccount(accountId: string): Promise<CallAccount> {
@@ -107,7 +115,7 @@ export async function pollCall(callId: string, timeoutMs = 240000, intervalMs = 
 export async function callContact(accountId: string, leadId: string) {
   const { data: acct, error: aErr } = await supabase
     .from("accounts")
-    .select("vapi_phone_numbers, vapi_assistant, retry_rules")
+    .select("vapi_phone_numbers, vapi_assistant, retry_rules, broker_knowledge_base")
     .eq("id", accountId)
     .single();
   if (aErr || !acct) throw new Error(`Account ${accountId} not found: ${aErr?.message}`);
@@ -123,8 +131,12 @@ export async function callContact(accountId: string, leadId: string) {
 
   await supabase.from("leads").update({ state: "calling" }).eq("id", leadId);
 
-  // Hand the agent what we know about this specific business (if we researched it).
-  const overrides = buildContextOverride(acct.vapi_assistant as Record<string, any> | null, lead.business_name, lead.business_profile);
+  // Hand the agent the business knowledge + what we researched about this specific lead.
+  const overrides = buildCallOverrides(acct.vapi_assistant as Record<string, any> | null, {
+    knowledgeBase: acct.broker_knowledge_base as string | null,
+    businessName: lead.business_name,
+    profile: lead.business_profile,
+  });
   const callId = await placeCall(acct as CallAccount, lead.phone, lead.first_name ?? undefined, { account_id: accountId, lead_id: leadId }, overrides);
   const result = await pollCall(callId);
 

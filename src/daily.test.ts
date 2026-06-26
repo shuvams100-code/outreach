@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { selectCallList, isWithinCallingWindow, type Candidate } from "./daily";
+import { selectCallList, isWithinCallingWindow, isUsFederalHoliday, atCapacity, type Candidate } from "./daily";
 
 const mk = (n: number, p = "r"): Candidate[] =>
   Array.from({ length: n }, (_, i) => ({ id: `${p}${i}`, phone: `+1555000${i}` }));
@@ -38,4 +38,25 @@ assert.equal(isWithinCallingWindow("America/New_York", 9, 18, thu15Z), true);   
 assert.equal(isWithinCallingWindow("America/Los_Angeles", 9, 18, thu15Z), false); // 08:00 PDT — too early
 assert.equal(isWithinCallingWindow("America/New_York", 9, 18, new Date("2026-06-25T02:00:00Z")), false); // 22:00 Wed — too late
 assert.equal(isWithinCallingWindow("America/New_York", 9, 18, new Date("2026-06-27T15:00:00Z")), false); // Saturday
+// Christmas 2026 is a Friday (a weekday) but a holiday → no calls. Noon ET = 17:00 UTC.
+assert.equal(isWithinCallingWindow("America/New_York", 9, 18, new Date("2026-12-25T17:00:00Z")), false);
 console.log("isWithinCallingWindow: ok");
+
+// --- isUsFederalHoliday (2026) ---
+assert.equal(isUsFederalHoliday(2026, 1, 1), true);    // New Year's
+assert.equal(isUsFederalHoliday(2026, 1, 19), true);   // MLK — 3rd Mon Jan
+assert.equal(isUsFederalHoliday(2026, 5, 25), true);   // Memorial — last Mon May
+assert.equal(isUsFederalHoliday(2026, 7, 4), true);    // Independence
+assert.equal(isUsFederalHoliday(2026, 9, 7), true);    // Labor — 1st Mon Sep
+assert.equal(isUsFederalHoliday(2026, 11, 26), true);  // Thanksgiving — 4th Thu Nov
+assert.equal(isUsFederalHoliday(2026, 12, 25), true);  // Christmas
+assert.equal(isUsFederalHoliday(2026, 3, 17), false);  // ordinary day
+assert.equal(isUsFederalHoliday(2026, 11, 27), false); // day after Thanksgiving — not federal
+console.log("isUsFederalHoliday: ok");
+
+// --- atCapacity ---
+assert.equal(atCapacity(20, 20), true);   // at ceiling → pause
+assert.equal(atCapacity(21, 20), true);   // over
+assert.equal(atCapacity(19, 20), false);  // room left
+assert.equal(atCapacity(99, null), false);// no capacity set → never throttle
+console.log("atCapacity: ok");
