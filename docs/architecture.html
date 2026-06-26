@@ -121,6 +121,7 @@
   <div class="sub">The whole machine, end to end — from <b>point zero</b> (an organization is created), through the
     <b>preset layer</b>, the crew of specialist agents that run every call, and out to <b>every possible ending</b>.
     Every <b>cyan</b> node is a frontend input — exactly what your onboarding screens must collect.</div>
+  <div style="margin-top:.9rem;font-size:.84rem;color:#64748b;">📖 This is the <b>detailed engineering map</b>. For the simpler, high-level "how it works" overview, open <a href="flow.html" style="color:#4f46e5;font-weight:700;text-decoration:none;">flow.html →</a></div>
   <div class="legend">
     <div class="chip"><span class="dot d-input"></span> Frontend input</div>
     <div class="chip"><span class="dot d-preset"></span> Preset layer</div>
@@ -160,8 +161,8 @@
           subgraph ONB ["① ONBOARDING — frontend inputs (cyan = a field your dashboard must collect)"]
             Org(["New organization created"]):::start
             OrgId["Org name · contact · email · client TZ"]:::input
-            Preset{"Pick use-case PRESET"}:::preset
-            PApply["PRESET LAYER auto-fills:<br/>endings · direction · sources<br/>· agent script · success def"]:::preset
+            Preset{"Pick PRESET(s)<br/>multi-select · stackable"}:::preset
+            PApply["PRESET LAYER composes:<br/>Sales · Qualification · Receptionist<br/>· Complaint · Lead-Gen · Custom<br/>→ unions endings · sources · layers script"]:::preset
             InVoice["Voice · dropdown"]:::input
             InPhone["Phone number(s) · caller-ID + inbound"]:::input
             InCal["Calendar + meeting link"]:::input
@@ -412,7 +413,7 @@ document.getElementById("roster").innerHTML = ROSTER.map(([nm,file,crew,role])=>
 
 const INPUTS = [
   ["Organization",false,[["Business name","business_name"],["Contact name","contact_name"],["Contact email","contact_email"],["Contact phone","contact_phone"],["Client timezone","timezone"]]],
-  ["Use-case preset",false,[["Pick: Sales / Receptionist / Qualifier / Complaint","preset"]]],
+  ["Use-case preset(s) · multi-select",false,[["Sales · Qualification · Receptionist · Complaint · Lead-Gen · Custom","preset"]]],
   ["Set by the preset",true,[["Which endings the agent gets","enabled_tools"],["Direction (in/out)","—"],["Sources on/off","sources"],["Agent script","system_prompt"],["First message","first_message"],["Success definition","success_definition"]]],
   ["The agent",false,[["Voice (dropdown)","voice_id"],["Knowledge base — FAQ answers","broker_knowledge_base"],["Qualifying questions","qualifying_questions"]]],
   ["Targeting",false,[["ICP description (2-4 lines)","icp_description"],["Target city","geo_city"],["Target state","geo_state"]]],

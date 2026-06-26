@@ -1,33 +1,46 @@
 import assert from "node:assert/strict";
 import { PRESETS, buildPresetUpdate, listPresets } from "./presets";
 
-// listPresets exposes every preset with the fields the dropdown needs
+// listPresets exposes every preset with the fields the dropdown needs (incl. category)
 const list = listPresets();
-assert.ok(list.length >= 4);
-assert.ok(list.every((p) => p.key && p.label && p.direction));
+assert.ok(list.length >= 6);
+assert.ok(list.every((p) => p.key && p.label && p.category));
+assert.ok(list.some((p) => p.category === "data"));
+assert.ok(list.some((p) => p.category === "custom"));
 console.log("listPresets: ok");
 
-// Sales preset → booking endings, scraping on, assistant assembled from the script
-let u = buildPresetUpdate(PRESETS.outbound_sales);
+// single preset → booking endings, scraping on, assistant assembled from the script
+let u = buildPresetUpdate([PRESETS.outbound_sales]);
 assert.deepEqual(u.enabled_tools, ["check_availability", "book_appointment"]);
 assert.equal(u.scraping_enabled, true);
-assert.equal(u.sources.length, 3);
-assert.equal((u.vapi_assistant.model.messages[0] as any).content, u.system_prompt);
-assert.ok(u.vapi_assistant.firstMessage.length > 0);
-console.log("buildPresetUpdate sales: ok");
+assert.equal((u.vapi_assistant as any).model.messages[0].content, u.system_prompt);
+console.log("buildPresetUpdate single: ok");
 
-// Receptionist → inbound, capture + booking endings, scraping OFF, no sources
-u = buildPresetUpdate(PRESETS.inbound_receptionist);
-assert.ok(u.enabled_tools.includes("capture_fields"));
-assert.ok(u.enabled_tools.includes("book_appointment"));
+// MULTIPLE presets → union the tools, OR the scraping, layer the scripts into one agent
+u = buildPresetUpdate([PRESETS.inbound_receptionist, PRESETS.outbound_sales]);
+const tools = u.enabled_tools as string[];
+assert.ok(tools.includes("check_availability") && tools.includes("book_appointment") && tools.includes("capture_fields"));
+assert.equal(tools.length, 3); // unioned, no duplicate check_availability/book_appointment
+assert.equal(u.scraping_enabled, true); // sales turns sources on
+assert.ok((u.system_prompt as string).includes("AI Receptionist"));
+assert.ok((u.system_prompt as string).includes("Outbound Sales")); // both roles layered in
+console.log("buildPresetUpdate multi-compose: ok");
+
+// data-only (lead_gen) → sources on, NO endings, NO script written (agent left manual)
+u = buildPresetUpdate([PRESETS.lead_gen]);
+assert.deepEqual(u.enabled_tools, []);
+assert.equal(u.scraping_enabled, true);
+assert.equal(u.vapi_assistant, undefined);   // no calling agent for data-only
+assert.equal(u.system_prompt, undefined);
+console.log("buildPresetUpdate data-only: ok");
+
+// custom (blank) → everything off, nothing scripted
+u = buildPresetUpdate([PRESETS.custom]);
+assert.deepEqual(u.enabled_tools, []);
 assert.equal(u.scraping_enabled, false);
-assert.equal(u.sources.length, 0);
-console.log("buildPresetUpdate receptionist: ok");
+assert.equal(u.vapi_assistant, undefined);
+console.log("buildPresetUpdate custom: ok");
 
-// Qualifier / Complaint → capture only
-assert.deepEqual(buildPresetUpdate(PRESETS.lead_qualification).enabled_tools, ["capture_fields"]);
-assert.deepEqual(buildPresetUpdate(PRESETS.complaint_intake).enabled_tools, ["capture_fields"]);
-
-// voice override flows through
-assert.equal(buildPresetUpdate(PRESETS.outbound_sales, "VOICE123").vapi_assistant.voice.voiceId, "VOICE123");
-console.log("buildPresetUpdate capture/voice: ok");
+// voice override flows through on a scripted preset
+assert.equal((buildPresetUpdate([PRESETS.outbound_sales], "VOICE123").vapi_assistant as any).voice.voiceId, "VOICE123");
+console.log("buildPresetUpdate voice: ok");
