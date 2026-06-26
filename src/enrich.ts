@@ -115,15 +115,24 @@ type LLMProfile = {
   last_name: string | null;
   email: string | null;
   business_profile: string | null;
-  is_broker: boolean;
+  fits_icp: boolean;
 };
 
-async function callLLM(text: string, businessName: string): Promise<LLMProfile | null> {
+// `icpDescription` is the account's definition of a good lead (per-account, never hardcoded).
+// When absent, every business is kept (fits_icp defaults true) — no filtering.
+async function callLLM(text: string, businessName: string, icpDescription?: string | null): Promise<LLMProfile | null> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
 
+  const icpLine = icpDescription
+    ? `\nWe are looking for leads matching this profile (the account's ideal customer): ${icpDescription}`
+    : "";
+  const fitsRule = icpDescription
+    ? `true if this business matches the profile above, false if it clearly does not`
+    : `always true (no filtering configured)`;
+
   const prompt = `Analyze this business text and return ONLY valid JSON — no markdown, no extra text.
-Business name: ${businessName}
+Business name: ${businessName}${icpLine}
 Content: ${text}
 
 Return this exact JSON shape:
@@ -132,7 +141,7 @@ Return this exact JSON shape:
   "last_name": last name of a key person found in the text, or null,
   "email": email address found in the text, or null,
   "business_profile": "2-4 sentences: what they do, who they serve, their specialties, and a compelling talking angle for a cold call",
-  "is_broker": true if this is an insurance broker or agency, false if clearly something unrelated (gym, restaurant, etc.)
+  "fits_icp": ${fitsRule}
 }`;
 
   // Two passes: pass 0 tries every model; if all are 429, a short backoff then pass 1.
@@ -182,7 +191,8 @@ async function tavilySearch(businessName: string, city: string, state: string): 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: key,
-        query: `"${businessName}" ${city} ${state} insurance broker`,
+        // Generic business lookup — no industry hardcoded (the ICP filtering happens in the LLM step).
+        query: `"${businessName}" ${city} ${state} company business`,
         max_results: 3,
         include_answer: true,
       }),
@@ -220,7 +230,8 @@ export type EnrichUpdate = {
 
 // Returns the update to apply, or null when NO rung produced data — caller leaves the
 // lead `new` so a re-run retries it (never fake-mark it `enriched` on empty results).
-export async function enrichLead(lead: Lead): Promise<EnrichUpdate | null> {
+// `icpDescription` (per-account) decides what counts as a fitting lead — no industry hardcoded.
+export async function enrichLead(lead: Lead, icpDescription?: string | null): Promise<EnrichUpdate | null> {
   const timezone = timezoneFromPhone(lead.phone);
   const website = (lead.raw_data?.website as string | null | undefined) ?? null;
   let profile: LLMProfile | null = null;
@@ -230,7 +241,7 @@ export async function enrichLead(lead: Lead): Promise<EnrichUpdate | null> {
     const text = await fetchSiteText(website);
     if (text) {
       const email = extractEmail(text);
-      const llm = await callLLM(text, lead.business_name ?? "");
+      const llm = await callLLM(text, lead.business_name ?? "", icpDescription);
       if (llm) profile = { ...llm, email: email ?? llm.email };
     }
   }
@@ -243,7 +254,7 @@ export async function enrichLead(lead: Lead): Promise<EnrichUpdate | null> {
       lead.address_state ?? "",
     );
     if (tavilyText) {
-      const llm = await callLLM(tavilyText, lead.business_name ?? "");
+      const llm = await callLLM(tavilyText, lead.business_name ?? "", icpDescription);
       if (llm) profile = profile ? { ...profile, ...llm } : llm;
     }
   }
@@ -251,14 +262,14 @@ export async function enrichLead(lead: Lead): Promise<EnrichUpdate | null> {
   // No rung produced anything → genuine failure. Leave `new`, don't dress it up as enriched.
   if (!profile) return null;
 
-  const isBroker = profile.is_broker ?? true;
+  const fitsIcp = profile.fits_icp ?? true;
   return {
     email: profile.email ?? null,
     first_name: profile.first_name ?? null,
     last_name: profile.last_name ?? null,
     business_profile: profile.business_profile ?? null,
     timezone,
-    state: isBroker ? "enriched" : "disqualified",
+    state: fitsIcp ? "enriched" : "disqualified",
   };
 }
 
@@ -269,6 +280,10 @@ export async function enrichAccount(accountId: string): Promise<{
   failed: number;
   errors: number;
 }> {
+  // The account's ICP (per-account; null = keep everything) drives the fit decision.
+  const { data: acct } = await supabase.from("accounts").select("icp_description").eq("id", accountId).single();
+  const icp = acct?.icp_description ?? null;
+
   const { data: leads, error } = await supabase
     .from("leads")
     .select("id, business_name, phone, city, address_state, raw_data")
@@ -282,7 +297,7 @@ export async function enrichAccount(accountId: string): Promise<{
     i++;
     const name = (lead as Lead).business_name ?? "(no name)";
     try {
-      const update = await enrichLead(lead as Lead);
+      const update = await enrichLead(lead as Lead, icp);
       if (!update) {
         failed++;
         console.log(`[${i}/${total}] ${name} → failed (no data; left as new)`);
@@ -298,7 +313,7 @@ export async function enrichAccount(accountId: string): Promise<{
         console.log(`[${i}/${total}] ${name} → enriched`);
       } else {
         disqualified++;
-        console.log(`[${i}/${total}] ${name} → disqualified (not a broker)`);
+        console.log(`[${i}/${total}] ${name} → disqualified (does not fit ICP)`);
       }
     } catch (e) {
       errors++;

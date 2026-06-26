@@ -40,3 +40,20 @@ assert.equal(out[0].state, "scrubbed");           // clean → cleared to call
 assert.equal(out[0].timezone, "America/Chicago"); // 512 = Austin TX
 assert.equal(out[1].state, "disqualified");       // on opt-out
 console.log("selectUploadLeads: ok");
+
+// --- selectUploadLeads: enrichment routing on website presence ---
+const withSite = [
+  { name: "Acme Co", phone: "512-555-3333", website: "https://acme.com" }, // has site
+  { name: "No Site Co", phone: "512-555-4444" },                            // no site
+];
+// enrichment ON → site lead routes to `new` (researched before calling); no-site → straight to scrubbed
+let res = selectUploadLeads(withSite, "acct-1", new Set(), new Set(), true);
+assert.equal(res.toEnrich, 1);
+assert.equal(res.rows[0].state, "new");
+assert.equal(res.rows[0].raw_data.website, "https://acme.com"); // copied for enrichLead to find
+assert.equal(res.rows[1].state, "scrubbed");
+// enrichment OFF → website ignored, everyone straight to scrubbed
+res = selectUploadLeads(withSite, "acct-1", new Set(), new Set(), false);
+assert.equal(res.toEnrich, 0);
+assert.equal(res.rows[0].state, "scrubbed");
+console.log("selectUploadLeads enrichment routing: ok");

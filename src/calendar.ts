@@ -110,6 +110,8 @@ export async function createEvent(
       location: e.meetingLink ?? undefined,
       start: { dateTime: start.toISOString(), timeZone: e.timezone },
       end: { dateTime: end.toISOString(), timeZone: e.timezone },
+      // Host gets the calendar's own reminders (popup + email) — no separate notification system needed.
+      reminders: { useDefault: true },
     },
   });
   return { id: res.data.id ?? null, htmlLink: res.data.htmlLink ?? null, meetingLink: e.meetingLink ?? null };

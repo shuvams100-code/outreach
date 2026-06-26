@@ -36,6 +36,8 @@
 | Customer Type | `customer_type` | text (`b2b \| b2c`) | ✅ In Schema | `b2b` allows scraping; `b2c` disables scraping (upload only) |
 | Enabled Pipes | `sources` | jsonb | ✅ In Schema | Array of active pipes, e.g. `[{"key":"upload","enabled":true}]` |
 | Upload Mapping | `upload_mapping` | jsonb | 🟡 Pending `*(not yet added)*` | Maps CSV column headers to contact fields |
+| Upload: Website column | *(auto-mapped from CSV)* | — | ✅ Live | If the uploaded file has a `website`/`url`/`site` column and enrichment is on, that lead is researched before calling (agent walks in informed). Optional but recommended for B2B lists. |
+| Enrichment on/off | `enrichment_enabled` | bool (default true) | ✅ In Schema | Drives both scraping enrichment AND upload enrichment (uploaded leads with a website get researched when true). |
 | Scraper Query | `search_query` | text | ✅ In Schema | Business category to search (e.g. "insurance broker") |
 | Scraper City | `geo_city` | text | ✅ In Schema | Target city for scraping |
 | Scraper State | `geo_state` | text | ✅ In Schema | Target state (two-letter code) |
@@ -43,12 +45,16 @@
 
 ---
 
-## 4. ICP & Qualification Filter (For Scraping Pipe)
+## 4. ICP & Qualification Filter (used by ALL enrichment — scraping + uploaded-with-website)
+
+> This **replaced** the old hardcoded "is it an insurance broker?" check in the engine. The LLM now
+> judges each researched lead against the account's own `icp_description`; a lead that doesn't fit is
+> marked `disqualified` (never called). Leave it blank → no filtering (every researched lead is kept).
 
 | Field | Column | Type | Status | Example (Tenant-0) |
 |---|---|---|---|---|
-| ICP Description | `icp_description` | text | ✅ In Schema | "independent insurance broker or agency, not a national carrier" (fed to LLM) |
-| Excluded Names | `exclude_names` | jsonb | ✅ In Schema | Array of name patterns to drop immediately, e.g. `["Geico", "State Farm"]` |
+| ICP Description | `icp_description` | text | ✅ **In Schema (added 2026-06-26)** · tenant-0 set | "Independent insurance brokers and small/independent agencies. NOT national carriers, captive agents, or unrelated businesses." |
+| Excluded Names | `exclude_names` | jsonb | 🟡 Pending `*(not yet added)*` | Array of name patterns to drop at ingestion, e.g. `["Geico", "State Farm"]` |
 
 ---
 
@@ -56,7 +62,7 @@
 
 | Field | Column | Type | Status | Notes |
 |---|---|---|---|---|
-| Assistant Config | `vapi_assistant` | jsonb | ✅ In Schema | Full assistant payload (contains script prompt, model settings, and voice options) |
+| Assistant Config | `vapi_assistant` | jsonb | ✅ In Schema | Full assistant payload (contains script prompt, model settings, and voice options). **Per-lead context is injected automatically at call time** — if a lead has a `business_profile` (from enrichment), the engine appends it as a system message so the agent knows who it's calling. No per-account config needed. |
 | Caller-ID Number IDs | `vapi_phone_numbers` | jsonb array | ✅ In Schema | VAPI phone number IDs to call from (dial cap is per number) |
 | Inbound Number IDs | `vapi_inbound_numbers` | jsonb array | 🟡 Pending `*(not yet added)*` | Numbers the agent answers |
 

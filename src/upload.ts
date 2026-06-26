@@ -56,6 +56,7 @@ const KEYS = {
   phone: ["phone", "phone_number", "phonenumber", "mobile", "cell", "number", "telephone"],
   email: ["email", "email_address", "e-mail"],
   company: ["company", "business", "business_name", "businessname", "organization", "agency"],
+  website: ["website", "url", "web", "site", "website_url", "homepage", "domain"],
 };
 
 const pick = (row: Record<string, string>, keys: string[]): string | null => {
@@ -73,21 +74,25 @@ export type ContactRow = {
   timezone: string | null;
   source: "upload";
   raw_data: Record<string, string>;
-  state: "scrubbed" | "disqualified";
+  state: "new" | "scrubbed" | "disqualified";
 };
 
 // Map raw CSV rows → contact rows: normalize phone, dedupe, opt-out check.
-// Uploaded lists skip enrichment, so a clean number goes straight to `scrubbed`
-// (cleared to call); a number on the opt-out list becomes `disqualified`.
+// Routing per lead:
+//  • on the opt-out list            → `disqualified`
+//  • enrichment on + has a website  → `new` (researched before calling, so the agent walks in informed)
+//  • otherwise                       → `scrubbed` (clean number, straight to the call queue)
+// The website is copied into raw_data.website so enrichLead can find it regardless of the source header.
 export function selectUploadLeads(
   rows: Record<string, string>[],
   accountId: string,
   existingPhones: Set<string>,
   blocked: Set<string>,
+  enrichEnabled = false,
 ) {
   const seen = new Set(existingPhones);
   const out: ContactRow[] = [];
-  let skippedNoPhone = 0, dup = 0, blockedCount = 0;
+  let skippedNoPhone = 0, dup = 0, blockedCount = 0, toEnrich = 0;
 
   for (const r of rows) {
     const phone = normalizePhone(pick(r, KEYS.phone));
@@ -104,8 +109,12 @@ export function selectUploadLeads(
       last = last ?? (parts.slice(1).join(" ") || null);
     }
 
+    const website = pick(r, KEYS.website);
     const isBlocked = blocked.has(phone);
+    const willEnrich = !isBlocked && enrichEnabled && !!website;
     if (isBlocked) blockedCount++;
+    if (willEnrich) toEnrich++;
+
     out.push({
       account_id: accountId,
       first_name: first,
@@ -115,11 +124,11 @@ export function selectUploadLeads(
       phone,
       timezone: timezoneFromPhone(phone),
       source: "upload",
-      raw_data: r,
-      state: isBlocked ? "disqualified" : "scrubbed",
+      raw_data: website ? { ...r, website } : r,
+      state: isBlocked ? "disqualified" : willEnrich ? "new" : "scrubbed",
     });
   }
-  return { rows: out, skippedNoPhone, dup, blocked: blockedCount };
+  return { rows: out, skippedNoPhone, dup, blocked: blockedCount, toEnrich };
 }
 
 // ---------- DB-facing entry point ----------
@@ -129,9 +138,10 @@ export async function uploadFile(accountId: string, csvPath: string) {
   const rows = parseCsv(text);
   if (!rows.length) throw new Error("CSV has no data rows (need a header row + at least one row).");
 
-  const [{ data: existing, error: exErr }, { data: optOuts, error: ooErr }] = await Promise.all([
+  const [{ data: existing, error: exErr }, { data: optOuts, error: ooErr }, { data: acct }] = await Promise.all([
     supabase.from("leads").select("phone").eq("account_id", accountId),
     supabase.from("opt_outs").select("phone").eq("account_id", accountId),
+    supabase.from("accounts").select("enrichment_enabled").eq("id", accountId).single(),
   ]);
   if (exErr) throw new Error(`Reading existing leads failed: ${exErr.message}`);
   if (ooErr) throw new Error(`Reading opt_outs failed: ${ooErr.message}`);
@@ -139,8 +149,8 @@ export async function uploadFile(accountId: string, csvPath: string) {
   const existingPhones = new Set((existing ?? []).map((l) => l.phone).filter(Boolean) as string[]);
   const blocked = new Set((optOuts ?? []).map((o) => o.phone).filter(Boolean) as string[]);
 
-  const { rows: contacts, skippedNoPhone, dup, blocked: blockedCount } =
-    selectUploadLeads(rows, accountId, existingPhones, blocked);
+  const { rows: contacts, skippedNoPhone, dup, blocked: blockedCount, toEnrich } =
+    selectUploadLeads(rows, accountId, existingPhones, blocked, acct?.enrichment_enabled ?? false);
 
   if (contacts.length) {
     const { error: insErr } = await supabase.from("leads").insert(contacts);
@@ -150,7 +160,8 @@ export async function uploadFile(accountId: string, csvPath: string) {
   return {
     parsed: rows.length,
     inserted: contacts.length,
-    ready: contacts.length - blockedCount,
+    ready: contacts.length - blockedCount - toEnrich, // straight-to-queue (no website / enrichment off)
+    toEnrich,                                         // will be researched before calling
     blocked: blockedCount,
     dup,
     skippedNoPhone,

@@ -297,19 +297,19 @@
           InboundRing --> InbPick --> InbConv --> InbWant
 
           subgraph S6 ["  STAGE 6 — Booking · Reminders · Capacity"]
-            CalEvent["Create Calendar event<br/>+ meeting link"]:::good
-            Alerts["Slack + email alert"]:::act
+            CalEvent["Create Calendar event<br/>+ meeting link + host reminders"]:::good
+            Alerts["Slack alert (internal)"]:::act
             IncOpen["Open bookings + 1"]:::act
-            PreMeet{"1h before meeting"}:::dec
-            RemCall["VAPI reminder call<br/>to prospect"]:::act
-            RemEmail["Reminder email<br/>to prospect"]:::act
+            PreMeet{"Before meeting"}:::dec
+            CalRemind["Google Calendar reminds<br/>host (automatic)"]:::act
+            RemCall["VAPI reminder call<br/>to prospect · good-to-have"]:::opt
             ConfirmQ{"Prospect<br/>confirms?"}:::dec
             Confirmed["CONFIRMED<br/>(meeting stands)"]:::good
             Reschedule["Wants to reschedule<br/>→ re-book a slot"]:::act
             MeetPasses["Meeting time passes"]:::act
             Closed{"Client marked<br/>closed?"}:::dec
             NoShow["NO-SHOW<br/>(flag · optional follow-up)"]:::bad
-            Nudge["Nudge email (24h loop)"]:::opt
+            Nudge["Dashboard flag: mark closed<br/>(good-to-have)"]:::opt
             DecOpen["Open bookings − 1"]:::act
             CapFree["Capacity freed →<br/>engine resumes"]:::fb
           end
@@ -319,8 +319,8 @@
           CalEvent --> Alerts
           CalEvent --> IncOpen
           CalEvent --> PreMeet
+          PreMeet --> CalRemind
           PreMeet --> RemCall
-          PreMeet --> RemEmail
           RemCall --> ConfirmQ
           ConfirmQ -- "Yes" --> Confirmed
           ConfirmQ -- "Reschedule" --> Reschedule

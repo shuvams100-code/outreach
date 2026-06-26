@@ -12,6 +12,7 @@ if (!path) {
 const r = await uploadFile(TENANT0_ID, path);
 console.log(
   `Upload done — ${r.parsed} rows read · ${r.inserted} added ` +
-    `(${r.ready} ready to call · ${r.blocked} on opt-out) · ` +
+    `(${r.ready} ready to call · ${r.toEnrich} to research first · ${r.blocked} on opt-out) · ` +
     `${r.dup} dup · ${r.skippedNoPhone} no-phone`,
 );
+if (r.toEnrich > 0) console.log(`Next: npm run enrich   (researches the ${r.toEnrich} with a website, then npm run scrub)`);

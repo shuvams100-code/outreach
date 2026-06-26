@@ -10,6 +10,27 @@ export type CallAccount = {
   vapi_assistant: Record<string, unknown> | null;
 };
 
+// Per-call context injection: append what we researched about THIS lead as an extra system message,
+// so the agent walks into the call already knowing who it's talking to. Returns undefined when there's
+// no profile (agent just uses its normal script). Pure + unit-tested; works for any account's assistant.
+export function buildContextOverride(
+  assistant: Record<string, any> | null,
+  businessName: string | null,
+  profile: string | null,
+): Record<string, unknown> | undefined {
+  if (!profile) return undefined;
+  const baseModel = (assistant?.model as Record<string, any>) ?? {};
+  const baseMessages = Array.isArray(baseModel.messages) ? baseModel.messages : [];
+  const contextMsg = {
+    role: "system",
+    content:
+      `CONTEXT FOR THIS CALL — you are calling ${businessName || "this business"}. ` +
+      `Here is what we researched about them: ${profile} ` +
+      `Use this naturally to be specific and relevant. Do NOT read it aloud or mention that you researched them.`,
+  };
+  return { model: { ...baseModel, messages: [...baseMessages, contextMsg] } };
+}
+
 export async function loadCallAccount(accountId: string): Promise<CallAccount> {
   const { data, error } = await supabase
     .from("accounts")
@@ -22,7 +43,13 @@ export async function loadCallAccount(accountId: string): Promise<CallAccount> {
 
 // Place one outbound call. The assistant (script/voice/model) comes entirely from the
 // account row — the engine hardcodes nothing per client. Returns the VAPI call id.
-export async function placeCall(account: CallAccount, toNumber: string, name?: string): Promise<string> {
+export async function placeCall(
+  account: CallAccount,
+  toNumber: string,
+  name?: string,
+  metadata?: Record<string, unknown>,
+  assistantOverrides?: Record<string, unknown>,
+): Promise<string> {
   const key = process.env.VAPI_API_KEY;
   if (!key) throw new Error("Missing VAPI_API_KEY in .env");
   const phoneNumberId = account.vapi_phone_numbers?.[0];
@@ -36,6 +63,10 @@ export async function placeCall(account: CallAccount, toNumber: string, name?: s
       phoneNumberId,
       customer: { number: toNumber, ...(name ? { name } : {}) },
       assistant: account.vapi_assistant,
+      // Stamp who this call is for, so the booking tools resolve the right account mid-call.
+      ...(metadata ? { metadata } : {}),
+      // Per-call tweaks (e.g. a reminder call's opening line) without a separate assistant.
+      ...(assistantOverrides ? { assistantOverrides } : {}),
     }),
   });
   if (!res.ok) throw new Error(`VAPI create-call failed (${res.status}): ${await res.text()}`);
@@ -84,7 +115,7 @@ export async function callContact(accountId: string, leadId: string) {
 
   const { data: lead, error: lErr } = await supabase
     .from("leads")
-    .select("id, phone, first_name, retry_count")
+    .select("id, phone, first_name, retry_count, business_name, business_profile")
     .eq("id", leadId)
     .eq("account_id", accountId)
     .single();
@@ -92,7 +123,9 @@ export async function callContact(accountId: string, leadId: string) {
 
   await supabase.from("leads").update({ state: "calling" }).eq("id", leadId);
 
-  const callId = await placeCall(acct as CallAccount, lead.phone, lead.first_name ?? undefined);
+  // Hand the agent what we know about this specific business (if we researched it).
+  const overrides = buildContextOverride(acct.vapi_assistant as Record<string, any> | null, lead.business_name, lead.business_profile);
+  const callId = await placeCall(acct as CallAccount, lead.phone, lead.first_name ?? undefined, { account_id: accountId, lead_id: leadId }, overrides);
   const result = await pollCall(callId);
 
   const now = new Date();
