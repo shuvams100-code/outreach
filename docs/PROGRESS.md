@@ -1,6 +1,6 @@
 # Reacher AI — Build Progress
 
-> Living status doc. Full design → `build-plan.md` · Visual flow → `flow.html` · Per-account fields → `onboarding-checklist.md`
+> Living status doc. Full design → `build-plan.md` · Operational flow → `flow.html` · **System architecture (agents + frontend inputs) → `architecture.html`** · Sellable use cases → `use-cases.md` · Per-account fields → `onboarding-checklist.md`
 
 **Product:** Multi-tenant AI calling service. Inbound + outbound. Any business signs up; one engine handles everything — no per-client code ever. Each client = one row in `accounts`.
 
@@ -56,7 +56,7 @@ foundation for the preset layer (item 10).
 **Build order:** ✅ `capture_fields` done → `take_message` + `transfer_to_human` next (unlocks the Receptionist product, the cleanest/lowest-risk thing to sell). Then the rest.
 
 Plus:
-10. **Use-case preset layer** — one-click onboarding bundles (Sales / Receptionist / Qualifier / …) that auto-fill an account's settings + which endings are enabled. (Vision: [[project-usecase-presets]].) *(still pending — `enabled_tools` foundation done)*
+10. ✅ **Use-case preset layer** — `src/presets.ts`: 4 presets (Outbound Sales, AI Receptionist, Lead Qualification, Complaint Intake). `applyPreset(accountId, key)` stamps endings + sources + agent script + success definition; leaves client-specific fields manual. `npm run preset` lists; `npm run preset -- <key> <accountId>` applies. Pure builder unit-tested. (Vision: [[project-usecase-presets]].)
 11. ✅ **ICP → search terms** — `src/icp.ts` `deriveSearchTerm()`; `scrapeAccount` derives + saves the search term from `icp_description` when none is set. So onboarding = write ICP + toggle sources.
 12. ✅ **Knowledge base into the agent** — `src/call.ts` `buildCallOverrides()` injects `broker_knowledge_base` so the agent can answer FAQs about the client's business (outbound via per-call override; inbound baked into the saved assistant via `make-test-assistant`). This is the "answer_from_kb" capability — no separate tool needed.
 

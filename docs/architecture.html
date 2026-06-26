@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reacher AI — System Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{ --ink:#0f1729; --muted:#64748b; --line:#e7ecf5; --indigo:#4f46e5; }
+  *,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+  html{ font-size:16px; scroll-behavior:smooth; }
+  body{
+    color:var(--ink); font-family:'Inter',system-ui,-apple-system,"Segoe UI",sans-serif; line-height:1.6;
+    background:
+      radial-gradient(820px 440px at 85% -8%, rgba(99,102,241,.12), transparent 60%),
+      radial-gradient(720px 420px at -8% 4%, rgba(20,184,166,.10), transparent 55%),
+      radial-gradient(640px 620px at 50% 120%, rgba(244,114,182,.08), transparent 60%),
+      linear-gradient(180deg,#e8edf6,#e2e9f4);
+    min-height:100vh;
+  }
+  .wrap{ max-width:1400px; margin:0 auto; padding:3.5rem 1.5rem 6rem; }
+
+  header{ padding-bottom:2rem; margin-bottom:2rem; }
+  .brand{ display:inline-flex; align-items:center; gap:.5rem; font-weight:800; letter-spacing:.05em; font-size:.72rem;
+    text-transform:uppercase; color:#fff; padding:.42rem 1rem; border-radius:999px;
+    background:linear-gradient(135deg,#6366f1,#a855f7); box-shadow:0 10px 26px -10px rgba(99,102,241,.55); }
+  h1{ margin:1.1rem 0 .5rem; font-size:2.5rem; font-weight:900; letter-spacing:-.03em;
+    background:linear-gradient(120deg,#0f1729 20%,#4f46e5 70%,#a855f7); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sub{ color:var(--muted); font-size:1.02rem; max-width:60rem; line-height:1.75; }
+  .sub b{ color:#334155; font-weight:600; }
+  .legend{ display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1.6rem; }
+  .chip{ display:flex; align-items:center; gap:.45rem; font-size:.74rem; font-weight:600; color:#475569;
+    background:#fff; border:1px solid var(--line); padding:.34rem .8rem; border-radius:.6rem; box-shadow:0 2px 8px -4px rgba(15,23,42,.1); }
+  .dot{ width:.82rem; height:.82rem; border-radius:.3rem; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(255,255,255,.5); }
+  .d-input{ background:#67e8f9; } .d-preset{ background:#c4b5fd; } .d-agent{ background:#818cf8; }
+  .d-dec{ background:#fcd34d; } .d-good{ background:#6ee7b7; } .d-bad{ background:#fda4af; }
+
+  /* full-bleed: break out of the centered column to use the whole screen width */
+  .canvas-card{ position:relative; left:50%; transform:translateX(-50%); width:95vw; max-width:1860px;
+    background:#fff; border:1px solid #e9eef7; border-radius:1.5rem; overflow:hidden; margin-bottom:3rem;
+    box-shadow:0 40px 80px -40px rgba(49,46,129,.28), 0 8px 24px -12px rgba(15,23,42,.08); }
+  .canvas-header{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem;
+    padding:1.2rem 1.7rem; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#fdfdff,#f7f9fe); }
+  .canvas-header h2{ font-size:1.1rem; font-weight:800; color:#1e293b; display:flex; align-items:center; gap:.6rem; }
+  .canvas-header .star{ display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:.6rem;
+    background:linear-gradient(135deg,#6366f1,#a855f7); color:#fff; font-size:.9rem; box-shadow:0 6px 16px -6px rgba(99,102,241,.6); }
+  .zoom-toolbar{ display:flex; align-items:center; gap:.35rem; }
+  .zoom-btn{ width:2.1rem; height:2.1rem; border-radius:.55rem; border:1px solid #e2e8f0; background:#fff; cursor:pointer;
+    display:grid; place-items:center; font-size:1rem; font-weight:700; color:#64748b; transition:all .15s; box-shadow:0 1px 3px rgba(15,23,42,.05); }
+  .zoom-btn:hover{ background:#f1f5ff; border-color:#c7d2fe; color:var(--indigo); transform:translateY(-1px); }
+  .zoom-label{ min-width:3.3rem; text-align:center; font-size:.74rem; font-weight:700; color:#94a3b8; font-variant-numeric:tabular-nums; }
+  .zoom-sep{ width:1px; height:1.5rem; background:#e2e8f0; margin:0 .2rem; }
+
+  .canvas-viewport{ position:relative; width:100%; height:86vh; min-height:600px; overflow:hidden; cursor:grab; user-select:none;
+    background-color:#eaf0f9;
+    background-image:
+      linear-gradient(rgba(99,102,241,.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,.13) 1px, transparent 1px),
+      linear-gradient(rgba(120,140,175,.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,140,175,.13) 1px, transparent 1px);
+    background-size:120px 120px, 120px 120px, 24px 24px, 24px 24px; }
+  .canvas-viewport.dragging{ cursor:grabbing; }
+  .canvas-inner{ position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; }
+  .canvas-inner .mermaid svg{ max-width:none !important; width:auto !important; height:auto !important; }
+  .canvas-hint{ position:absolute; bottom:1.1rem; left:50%; transform:translateX(-50%); font-size:.72rem; color:#64748b;
+    background:rgba(255,255,255,.92); border:1px solid var(--line); padding:.35rem .9rem; border-radius:.5rem; pointer-events:none;
+    backdrop-filter:blur(6px); box-shadow:0 4px 14px -6px rgba(15,23,42,.15); transition:opacity .5s; }
+  .canvas-hint.hidden{ opacity:0; }
+
+  /* premium node + cluster polish */
+  .node rect,.node polygon,.node path,.node circle{ filter:drop-shadow(0 6px 13px rgba(30,41,90,.10)); }
+  .node rect{ rx:12 !important; ry:12 !important; }
+  .node:hover rect,.node:hover polygon,.node:hover path{ filter:drop-shadow(0 8px 18px rgba(79,70,229,.32)) !important; }
+  .cluster rect{ rx:20 !important; ry:20 !important; }
+  .cluster span,.cluster .nodeLabel{ font-weight:800 !important; font-size:15.5px !important; letter-spacing:.01em; fill:#1e293b !important; color:#1e293b !important; }
+  .edgePaths path{ stroke:#475569 !important; stroke-width:2.2px; }
+  .flowchart-link{ stroke:#475569 !important; }
+  marker path, .marker{ fill:#475569 !important; stroke:#475569 !important; }
+  @keyframes flow{ to{ stroke-dashoffset:-15; } }
+  .edgeLabel{ background:#fff !important; }
+  .edgeLabel rect{ fill:#fff !important; opacity:.95 !important; }
+  .edgeLabel span,.edgeLabel p{ color:#334155 !important; font-size:13px !important; font-weight:700; }
+  /* bigger, bolder, higher-contrast node text so it reads even zoomed out */
+  .node .nodeLabel, .node span, .node p{ font-weight:700 !important; }
+
+  .divider{ margin:3.5rem 0 0; }
+  .section-title{ font-size:1.5rem; font-weight:900; letter-spacing:-.02em; margin:0 0 .3rem; }
+  .section-sub{ color:var(--muted); font-size:.92rem; margin-bottom:1.4rem; }
+
+  .roster{ display:grid; grid-template-columns:repeat(auto-fill,minmax(228px,1fr)); gap:1rem; }
+  .agent-card{ background:#fff; border:1px solid #eaeff7; border-left-width:4px; border-radius:1rem; padding:1.1rem 1.2rem;
+    box-shadow:0 10px 28px -18px rgba(30,41,90,.22); transition:transform .16s, box-shadow .16s; }
+  .agent-card:hover{ transform:translateY(-4px); box-shadow:0 22px 44px -22px rgba(79,70,229,.4); }
+  .agent-card .crew{ display:inline-block; font-size:.6rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+    padding:.16rem .5rem; border-radius:.4rem; margin-bottom:.55rem; }
+  .agent-card .nm{ font-weight:800; font-size:1.05rem; color:#0f1729; }
+  .agent-card .file{ font-size:.68rem; color:#94a3b8; font-family:ui-monospace,"SF Mono",monospace; margin:.12rem 0 .5rem; }
+  .agent-card .role{ font-size:.81rem; color:#475569; line-height:1.55; }
+
+  .inputs-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:1.1rem; }
+  .input-group{ background:#fff; border:1px solid #eaeff7; border-radius:1rem; padding:1.15rem 1.25rem; box-shadow:0 10px 26px -18px rgba(30,41,90,.2); }
+  .input-group h3{ font-size:.96rem; font-weight:800; display:flex; align-items:center; gap:.55rem; margin-bottom:.75rem; color:#1e293b; }
+  .input-group h3 .ic{ width:1.6rem; height:1.6rem; border-radius:.5rem; display:grid; place-items:center; font-size:.72rem; color:#fff;
+    background:linear-gradient(135deg,#22d3ee,#0891b2); box-shadow:0 5px 12px -5px rgba(8,145,178,.6); }
+  .input-group.auto h3 .ic{ background:linear-gradient(135deg,#a855f7,#7c3aed); box-shadow:0 5px 12px -5px rgba(124,58,237,.6); }
+  .input-group ul{ list-style:none; display:flex; flex-direction:column; gap:.45rem; }
+  .input-group li{ font-size:.82rem; color:#475569; display:flex; justify-content:space-between; gap:.5rem; align-items:baseline; }
+  .input-group li code{ font-size:.68rem; background:#f1f5fb; color:#6366f1; padding:.08rem .4rem; border-radius:.35rem; font-family:ui-monospace,monospace; white-space:nowrap; }
+  .badge-auto{ font-size:.62rem; font-weight:800; color:#7c3aed; background:#f5f3ff; border:1px solid #ddd6fe; padding:.06rem .42rem; border-radius:.4rem; }
+
+  footer{ text-align:center; color:var(--muted); font-size:.8rem; padding-top:1.8rem; border-top:1px solid var(--line); margin-top:3.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="brand">◆ Reacher AI</span>
+  <h1>System Architecture</h1>
+  <div class="sub">The whole machine, end to end — from <b>point zero</b> (an organization is created), through the
+    <b>preset layer</b>, the crew of specialist agents that run every call, and out to <b>every possible ending</b>.
+    Every <b>cyan</b> node is a frontend input — exactly what your onboarding screens must collect.</div>
+  <div class="legend">
+    <div class="chip"><span class="dot d-input"></span> Frontend input</div>
+    <div class="chip"><span class="dot d-preset"></span> Preset layer</div>
+    <div class="chip"><span class="dot d-agent"></span> Agent</div>
+    <div class="chip"><span class="dot d-dec"></span> Gate / decision</div>
+    <div class="chip"><span class="dot d-good"></span> Ending</div>
+    <div class="chip"><span class="dot d-bad"></span> Stop / reject</div>
+  </div>
+</header>
+
+<main>
+  <div class="canvas-card">
+    <div class="canvas-header">
+      <h2><span class="star">◆</span> The connected system — onboarding to outcome</h2>
+      <div class="zoom-toolbar">
+        <button class="zoom-btn" id="zoomOut" title="Zoom out">−</button>
+        <span class="zoom-label" id="zoomLevel">100%</span>
+        <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+        <div class="zoom-sep"></div>
+        <button class="zoom-btn" id="zoomFit" title="Fit" style="font-size:.65rem;">FIT</button>
+      </div>
+    </div>
+    <div class="canvas-viewport" id="viewport">
+      <div class="canvas-inner" id="canvasInner">
+        <div class="mermaid" id="diagram">
+        flowchart TD
+          classDef input fill:#cffafe,stroke:#0891b2,color:#0e7490,stroke-width:2px;
+          classDef preset fill:#ede9fe,stroke:#7c3aed,color:#5b21b6,stroke-width:2px;
+          classDef agent fill:#e0e7ff,stroke:#4f46e5,color:#3730a3,stroke-width:2px;
+          classDef act fill:#f1f5f9,stroke:#94a3b8,color:#475569;
+          classDef dec fill:#fef3c7,stroke:#f59e0b,color:#92400e,stroke-width:2px;
+          classDef good fill:#d1fae5,stroke:#059669,color:#065f46,stroke-width:2px;
+          classDef bad fill:#ffe4e6,stroke:#fb7185,color:#9f1239,stroke-width:1.5px;
+          classDef infra fill:#eef2f8,stroke:#94a3b8,color:#475569,stroke-dasharray:5 4;
+          classDef start fill:#4f46e5,stroke:#4338ca,color:#ffffff,stroke-width:2px;
+
+          subgraph ONB ["① ONBOARDING — frontend inputs (cyan = a field your dashboard must collect)"]
+            Org(["New organization created"]):::start
+            OrgId["Org name · contact · email · client TZ"]:::input
+            Preset{"Pick use-case PRESET"}:::preset
+            PApply["PRESET LAYER auto-fills:<br/>endings · direction · sources<br/>· agent script · success def"]:::preset
+            InVoice["Voice · dropdown"]:::input
+            InPhone["Phone number(s) · caller-ID + inbound"]:::input
+            InCal["Calendar + meeting link"]:::input
+            InKB["Knowledge base · FAQ answers"]:::input
+            InICP["ICP description · 2-4 lines"]:::input
+            InGeo["Target geo · city / state"]:::input
+            InRules["Dial cap · hours · capacity · retry rules"]:::input
+            InWeb["Web-form capture URL · read-only"]:::input
+            Live(["Flip ACTIVE"]):::start
+          end
+
+          subgraph INTAKE ["② INTAKE + DEDUP — a lead enters, or is rejected"]
+            Profiler["PROFILER<br/>ICP → search term · LLM"]:::agent
+            Scout["SCOUT<br/>google_maps · yellow_pages · hotfrog"]:::agent
+            AdGate{"isAd /<br/>isAdvertisement?"}:::dec
+            DropAd["drop · sponsored / carrier"]:::bad
+            Porter["PORTER<br/>parse CSV · auto-map headers"]:::agent
+            Catcher["CATCHER<br/>token → map fields"]:::agent
+            Inb(["Inbound call"]):::start
+            PhGate{"usable phone?"}:::dec
+            DropNo["skip · no phone"]:::bad
+            Norm["normalize → E.164<br/>10-digit→+1 · 11-digit→+ · else reject"]:::act
+            DupGate{"phone OR domain seen?<br/>DB + this run"}:::dec
+            DropDup["skip · duplicate"]:::bad
+          end
+
+          subgraph PREP ["③ PREP — Guardian gate, then Sleuth's research ladder"]
+            OptGate{"GUARDIAN:<br/>on opt-out / DNC?"}:::dec
+            DQ1["DISQUALIFIED"]:::bad
+            RouteGate{"enrichment ON<br/>+ has website?"}:::dec
+            Sleuth["SLEUTH · research"]:::agent
+            WebGate{"has website?"}:::dec
+            Fetch["fetch site · 8s timeout<br/>regex → email"]:::act
+            LLM1["LLM gpt-oss-120b:free"]:::agent
+            LLM2["fallback 20b:free<br/>429 → 4s backoff"]:::agent
+            ProfGate{"profile<br/>returned?"}:::dec
+            Tavily["TAVILY web search<br/>name + city + state → LLM"]:::act
+            FitGate{"fits account ICP?<br/>icp_description"}:::dec
+            Enriched["ENRICHED<br/>+ business_profile + TZ"]:::good
+            DQ2["DISQUALIFIED · off-ICP"]:::bad
+            StayNew["stays NEW · re-run retries<br/>never fake-enriched"]:::dec
+          end
+
+          subgraph CMD ["④ DISPATCHER — who gets called today"]
+            Cron(["Daily cron"]):::start
+            ActGate{"active &amp;<br/>billing OK?"}:::dec
+            Paused["skip · paused"]:::bad
+            CapGate{"open bookings ≥<br/>booking_capacity?"}:::dec
+            Hold["HOLD · at capacity"]:::bad
+            Build["build list · cap 40 / number"]:::act
+            RetrySel["P1 retries-due, oldest first<br/>capped 40% = 16 · overflow→tomorrow"]:::act
+            FreshSel["P2 fresh scrubbed · FIFO · fill 24"]:::act
+            WinGate{"weekday? · not US holiday?<br/>within hours in lead TZ?"}:::dec
+            Skip["skip lead · not now"]:::act
+          end
+
+          subgraph FIELD ["⑤ THE CALL — Herald, Ghostwriter, the Voice"]
+            Herald["HERALD<br/>place call · stamp account + lead"]:::agent
+            Ghost["GHOSTWRITER<br/>inject knowledge + lead research"]:::agent
+            Switchboard["SWITCHBOARD<br/>inbound front door"]:::agent
+            Voice["THE VOICE<br/>converse · qualify"]:::agent
+          end
+
+          subgraph TOOLS ["⑥ MID-CALL TOOLS — Quartermaster resolves &amp; dispatches"]
+            ResGate{"resolve account:<br/>metadata → number → default?"}:::dec
+            Refuse["REFUSE · won't book on wrong calendar"]:::bad
+            Which{"which tool?"}:::dec
+            CA["TIMEKEEPER check_availability<br/>Mon-Fri · hours · buffer · horizon · skip busy"]:::agent
+            BVGate{"slot still open?<br/>re-validate by instant"}:::dec
+            Alt["offer alternative slots"]:::act
+            Concierge["CONCIERGE book_appointment<br/>event + reminders + Meet link"]:::agent
+            Scribe["SCRIBE capture_fields<br/>answers + qualified + type"]:::agent
+          end
+
+          subgraph OUT ["⑦ ARBITER — classify the finished call"]
+            Arbiter["ARBITER"]:::agent
+            AnsGate{"answered?<br/>no-answer/busy/vm/failed/error → no"}:::dec
+            RetryGate{"retry_count &lt; 3?"}:::dec
+            Sched["next_retry = now + 3 days<br/>retry_count++"]:::act
+            OutGate{"structuredData<br/>.outcome?"}:::dec
+          end
+
+          subgraph ENDX ["⑧ ENDINGS"]
+            Booked["MEETING BOOKED ✓"]:::good
+            Callback["CALLBACK LOGGED"]:::good
+            Complaint["COMPLAINT TICKET"]:::good
+            Qualified["LEAD QUALIFIED"]:::good
+            NotInt["NOT INTERESTED"]:::bad
+            NoAns["NO ANSWER"]:::act
+            Follow["FOLLOW-UP LIST · manual"]:::bad
+          end
+
+          subgraph FUP ["⑨ FOLLOW-THROUGH — Crier, reminders, capacity loop"]
+            Counter["open-bookings counter +1"]:::act
+            Crier["CRIER → Slack alert"]:::agent
+            CalRem["Google Calendar reminds host"]:::act
+            Nudge["NUDGE sweep · ~every 15 min"]:::agent
+            DueGate{"meeting in next hour<br/>&amp; not reminded?"}:::dec
+            RemCall["reminder call → prospect<br/>stamp reminder_1h_sent_at"]:::act
+            PassGate{"meeting passed, still open?<br/>client marks won/lost/no-show?"}:::dec
+            FreeCap["counter −1 · capacity freed"]:::good
+            OpenStill["stays open · forcing function"]:::bad
+          end
+
+          Ready[["READY QUEUE · state = scrubbed"]]:::infra
+          Vault[["VAULT — shared memory · every agent reads &amp; writes"]]:::infra
+
+          %% ---- full wiring ----
+          Org --> OrgId --> Preset --> PApply
+          PApply --> InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb
+          InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb --> Live
+          Live --> Profiler & Porter & Catcher
+          InICP -. "drives" .-> Profiler
+          InGeo -. "targets" .-> Scout
+          InWeb -. "endpoint" .-> Catcher
+          Profiler --> Scout --> AdGate
+          AdGate -- yes --> DropAd
+          AdGate -- no --> PhGate
+          Porter --> PhGate
+          Catcher --> PhGate
+          PhGate -- no --> DropNo
+          PhGate -- yes --> Norm --> DupGate
+          DupGate -- yes --> DropDup
+          DupGate -- no --> OptGate
+          OptGate -- yes --> DQ1
+          OptGate -- no --> RouteGate
+          RouteGate -- "no · site-less / enrich off" --> Ready
+          RouteGate -- yes --> Sleuth --> WebGate
+          WebGate -- yes --> Fetch --> LLM1
+          LLM1 -- 429 --> LLM2
+          WebGate -- no --> Tavily
+          LLM1 --> ProfGate
+          LLM2 --> ProfGate
+          ProfGate -- yes --> FitGate
+          ProfGate -- no --> Tavily
+          Tavily --> FitGate
+          FitGate -- yes --> Enriched --> Ready
+          FitGate -- no --> DQ2
+          Sleuth -. "no data" .-> StayNew
+          Cron --> ActGate
+          ActGate -- no --> Paused
+          ActGate -- yes --> CapGate
+          CapGate -- yes --> Hold
+          CapGate -- no --> Build
+          Ready -. "supplies" .-> Build
+          Build --> RetrySel & FreshSel
+          RetrySel & FreshSel --> WinGate
+          WinGate -- no --> Skip
+          WinGate -- yes --> Herald --> Ghost --> Voice
+          InKB -. "arms" .-> Ghost
+          InPhone -. "inbound number" .-> Switchboard
+          Inb --> Switchboard --> Voice
+          Voice --> ResGate
+          ResGate -- none --> Refuse
+          ResGate -- resolved --> Which
+          Which -- check_availability --> CA
+          InCal -. "real slots" .-> CA
+          CA --> BVGate
+          Which -- book_appointment --> BVGate
+          BVGate -- no --> Alt
+          Alt -. "retry" .-> CA
+          BVGate -- yes --> Concierge
+          Which -- capture_fields --> Scribe
+          Concierge --> Counter
+          Concierge --> Booked
+          Concierge --> Crier
+          Scribe --> Callback & Complaint & Qualified
+          Voice --> Arbiter --> AnsGate
+          AnsGate -- no --> NoAns --> RetryGate
+          RetryGate -- yes --> Sched
+          Sched -. "due date" .-> Build
+          RetryGate -- no --> Follow
+          AnsGate -- yes --> OutGate
+          OutGate -- booked --> Booked
+          OutGate -- else --> NotInt
+          Booked --> CalRem
+          Counter -. "feeds" .-> CapGate
+          Nudge --> DueGate
+          DueGate -- yes --> RemCall
+          RemCall -. "confirm / reschedule" .-> Voice
+          Booked --> PassGate
+          PassGate -- yes --> FreeCap
+          FreeCap -. "frees" .-> CapGate
+          PassGate -- no --> OpenStill
+          Sleuth -. "writes" .-> Vault
+          Concierge -. "writes" .-> Vault
+          Scribe -. "writes" .-> Vault
+          Arbiter -. "writes" .-> Vault
+
+          style ONB fill:#ecfeff,stroke:#a5e8f3,color:#0e7490
+          style INTAKE fill:#eff6ff,stroke:#bfdbfe,color:#1e40af
+          style PREP fill:#f6f4ff,stroke:#ddd6fe,color:#5b21b6
+          style CMD fill:#fffbeb,stroke:#fde68a,color:#92400e
+          style FIELD fill:#eef2ff,stroke:#c7d2fe,color:#3730a3
+          style TOOLS fill:#f0fdfa,stroke:#99f6e4,color:#0f766e
+          style OUT fill:#f8fafc,stroke:#e2e8f0,color:#334155
+          style ENDX fill:#f0fdf4,stroke:#bbf7d0,color:#166534
+          style FUP fill:#fff5f6,stroke:#fecdd3,color:#9f1239
+        </div>
+      </div>
+      <div class="canvas-hint" id="hint">Scroll to zoom · drag to pan · cyan nodes are the fields your dashboard collects</div>
+    </div>
+  </div>
+
+  <div class="divider">
+    <h2 class="section-title">The crew</h2>
+    <p class="section-sub">Every backend file is a named specialist. One agent, one job — wired into one system.</p>
+  </div>
+  <div class="roster" id="roster"></div>
+
+  <div class="divider">
+    <h2 class="section-title">Frontend inputs — the complete onboarding list</h2>
+    <p class="section-sub">Everything the dashboard collects to switch a client on. <span class="badge-auto">auto</span> = the preset fills it; the rest are typed or picked by hand.</p>
+  </div>
+  <div class="inputs-grid" id="inputs"></div>
+</main>
+<footer>Reacher AI — one connected system, onboarding to outcome.</footer>
+</div>
+
+<script>
+const CREW_COLORS = { Intake:"#3b82f6", Prep:"#8b5cf6", Command:"#f59e0b", Field:"#6366f1", "Sub-agents":"#14b8a6", "Follow-through":"#f43f5e", Infra:"#64748b" };
+const ROSTER = [
+  ["Scout","src/scrape.ts","Intake","Hunts prospects across Google Maps, Yellow Pages &amp; Hotfrog."],
+  ["Porter","src/upload.ts","Intake","Carries in CSV / Excel lists, normalized and deduped."],
+  ["Catcher","src/webform.ts","Intake","Catches web-form submissions at the account's webhook URL."],
+  ["Profiler","src/icp.ts","Prep","Turns the plain-English ICP into the search terms to hunt."],
+  ["Sleuth","src/enrich.ts","Prep","Researches each lead so the agent walks in informed."],
+  ["Guardian","src/compliance.ts","Prep","The gate — drops opt-outs &amp; DNC numbers."],
+  ["Dispatcher","src/daily.ts","Command","Decides who gets called today — caps, retries, hours, holidays, capacity."],
+  ["Herald","src/call.ts","Field","Places the call and runs the full cycle."],
+  ["Ghostwriter","(in Herald)","Field","Writes the agent's briefing + business knowledge for each call."],
+  ["The Voice","VAPI agent","Field","The one the customer actually talks to."],
+  ["Quartermaster","src/tools.ts","Sub-agents","Hands the Voice its tools mid-call."],
+  ["Timekeeper","src/calendar.ts","Sub-agents","Reads the real calendar for open slots."],
+  ["Concierge","src/booking.ts","Sub-agents","Books the meeting, live, on the call."],
+  ["Scribe","capture_fields","Sub-agents","Writes down answers — qualify, survey, complaint, callback."],
+  ["Arbiter","src/outcome.ts","Follow-through","Judges the call result and routes it."],
+  ["Nudge","src/reminders.ts","Follow-through","Calls the prospect ~1h before to confirm."],
+  ["Crier","src/notify.ts","Follow-through","Announces every booking to Slack."],
+  ["Switchboard","src/server.ts","Infra","The public front door — both webhooks."],
+  ["Vault","src/lib/supabase.ts","Infra","The shared memory every agent reads &amp; writes."],
+  ["Archivist","src/export.ts","Infra","Exports the records as a clean list."],
+];
+document.getElementById("roster").innerHTML = ROSTER.map(([nm,file,crew,role])=>{
+  const c = CREW_COLORS[crew] || "#64748b";
+  return `<div class="agent-card" style="border-left-color:${c}"><span class="crew" style="color:${c};background:${c}1a">${crew}</span><div class="nm">${nm}</div><div class="file">${file}</div><div class="role">${role}</div></div>`;
+}).join("");
+
+const INPUTS = [
+  ["Organization",false,[["Business name","business_name"],["Contact name","contact_name"],["Contact email","contact_email"],["Contact phone","contact_phone"],["Client timezone","timezone"]]],
+  ["Use-case preset",false,[["Pick: Sales / Receptionist / Qualifier / Complaint","preset"]]],
+  ["Set by the preset",true,[["Which endings the agent gets","enabled_tools"],["Direction (in/out)","—"],["Sources on/off","sources"],["Agent script","system_prompt"],["First message","first_message"],["Success definition","success_definition"]]],
+  ["The agent",false,[["Voice (dropdown)","voice_id"],["Knowledge base — FAQ answers","broker_knowledge_base"],["Qualifying questions","qualifying_questions"]]],
+  ["Targeting",false,[["ICP description (2-4 lines)","icp_description"],["Target city","geo_city"],["Target state","geo_state"]]],
+  ["Phone numbers",false,[["Outbound + inbound number(s)","vapi_phone_numbers"],["Caller-ID name","caller_id_name"]]],
+  ["Calling rules",false,[["Daily dial cap / number","daily_dial_cap"],["Calling hours start/end","calling_hours_*"],["Retry rules","retry_rules"],["Refill threshold","refill_threshold"]]],
+  ["Booking",false,[["Calendar connection","google_calendar_id"],["Meeting length / buffer","meeting_*_minutes"],["Meeting link","booking.meeting_link"],["Booking capacity","booking_capacity"]]],
+  ["Web-form capture",false,[["Your lead-capture URL (read-only)","webhook_token"]]],
+  ["Account control",false,[["Active / paused","status"],["Billing (paid → active)","Dodo"]]],
+];
+document.getElementById("inputs").innerHTML = INPUTS.map(([title,auto,rows])=>
+  `<div class="input-group ${auto?'auto':''}"><h3><span class="ic">${auto?'✦':'▤'}</span>${title}${auto?' <span class="badge-auto">auto</span>':''}</h3><ul>${
+    rows.map(([label,code])=>`<li><span>${label}</span><code>${code}</code></li>`).join("")
+  }</ul></div>`).join("");
+
+mermaid.initialize({ startOnLoad:true, theme:"base", securityLevel:"loose",
+  flowchart:{ curve:"basis", nodeSpacing:46, rankSpacing:54, useMaxWidth:false },
+  themeVariables:{ fontFamily:"'Inter',sans-serif", fontSize:"17px", lineColor:"#475569",
+    primaryColor:"#eef2ff", primaryBorderColor:"#c7d2fe", primaryTextColor:"#0f1729", tertiaryColor:"#f8fafc",
+    clusterBkg:"#f8fafc", clusterBorder:"#e2e8f0" }});
+
+window.addEventListener("load", ()=>setTimeout(init,700));
+function init(){
+  const vp=document.getElementById("viewport"), inner=document.getElementById("canvasInner"),
+        hint=document.getElementById("hint"), svg=inner.querySelector("svg");
+  if(!vp||!inner||!svg) return;
+  svg.style.maxWidth="none"; svg.style.width="auto"; svg.style.height="auto";
+  let scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+  setTimeout(()=>hint.classList.add("hidden"),5500);
+  const apply=()=>{ inner.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; document.getElementById("zoomLevel").textContent=Math.round(scale*100)+"%"; };
+  function fit(){ const vr=vp.getBoundingClientRect(); const sw=svg.getBBox?.().width||1400, sh=svg.getBBox?.().height||1000;
+    scale=Math.max(.1,Math.min((vr.width-40)/sw,(vr.height-40)/sh,1.8)); tx=(vr.width-sw*scale)/2; ty=24; apply(); }
+  fit();
+  vp.addEventListener("wheel",e=>{ e.preventDefault(); hint.classList.add("hidden"); const rect=vp.getBoundingClientRect();
+    const mx=e.clientX-rect.left,my=e.clientY-rect.top,d=e.deltaY>0?.88:1.12,ns=Math.max(.1,Math.min(5,scale*d)),ra=ns/scale;
+    tx=mx-ra*(mx-tx); ty=my-ra*(my-ty); scale=ns; apply(); },{passive:false});
+  vp.addEventListener("mousedown",e=>{ if(e.button!==0)return; dragging=true; lastX=e.clientX; lastY=e.clientY; vp.classList.add("dragging"); });
+  window.addEventListener("mousemove",e=>{ if(!dragging)return; tx+=e.clientX-lastX; ty+=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; apply(); });
+  window.addEventListener("mouseup",()=>{ dragging=false; vp.classList.remove("dragging"); });
+  let lastDist=0,lcx=0,lcy=0;
+  vp.addEventListener("touchstart",e=>{ const t=[...e.touches]; if(t.length===2){ lastDist=Math.hypot(t[1].clientX-t[0].clientX,t[1].clientY-t[0].clientY);
+    const r=vp.getBoundingClientRect(); lcx=(t[0].clientX+t[1].clientX)/2-r.left; lcy=(t[0].clientY+t[1].clientY)/2-r.top; } else if(t.length===1){ lastX=t[0].clientX; lastY=t[0].clientY; } },{passive:true});
+  vp.addEventListener("touchmove",e=>{ e.preventDefault(); const t=[...e.touches];
+    if(t.length===2){ const d=Math.hypot(t[1].clientX-t[0].clientX,t[1].clientY-t[0].clientY); const r=vp.getBoundingClientRect();
+      const cx=(t[0].clientX+t[1].clientX)/2-r.left,cy=(t[0].clientY+t[1].clientY)/2-r.top,k=d/(lastDist||d),ns=Math.max(.1,Math.min(5,scale*k)),ra=ns/scale;
+      tx=cx-ra*(lcx-tx); ty=cy-ra*(lcy-ty); scale=ns; lastDist=d; lcx=cx; lcy=cy; apply(); }
+    else if(t.length===1){ tx+=t[0].clientX-lastX; ty+=t[0].clientY-lastY; lastX=t[0].clientX; lastY=t[0].clientY; apply(); } },{passive:false});
+  const zoomAt=(f)=>{ const r=vp.getBoundingClientRect(),cx=r.width/2,cy=r.height/2,ns=Math.max(.1,Math.min(5,scale*f)),ra=ns/scale; tx=cx-ra*(cx-tx); ty=cy-ra*(cy-ty); scale=ns; apply(); };
+  document.getElementById("zoomIn").onclick=()=>zoomAt(1.3);
+  document.getElementById("zoomOut").onclick=()=>zoomAt(.7);
+  document.getElementById("zoomFit").onclick=fit;
+}
+</script>
+</body>
+</html>
