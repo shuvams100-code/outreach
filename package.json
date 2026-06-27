@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "npm run dev --prefix frontend",
     "seed": "tsx scripts/seed-tenant0.ts",
     "scrape": "tsx scripts/scrape-tenant0.ts",
     "probe-source": "tsx scripts/probe-source.ts",
