@@ -25,5 +25,5 @@ if (!accountId) { console.error("Account id required:  npm run preset -- <keys> 
 const keys = keysArg.split(",").map((k) => k.trim()).filter(Boolean);
 const r = await applyPreset(accountId, keys);
 console.log(`Applied [${r.applied.join(" + ")}] → account ${accountId}`);
-console.log(`  endings: [${r.enabled_tools.join(", ") || "(none — manual)"}] · scraping: ${r.scraping ? "on" : "off"}`);
+console.log(`  endings: [${(r.enabled_tools as string[]).join(", ") || "(none — manual)"}] · scraping: ${r.scraping ? "on" : "off"}`);
 console.log("Still to fill (client-specific): phone number, calendar, knowledge base, ICP.");

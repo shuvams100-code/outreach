@@ -34,6 +34,6 @@ if (process.argv[2] === "create") {
   });
   console.log("Created:", ev.id);
   console.log("Event link:", ev.htmlLink);
-  console.log("Meet link :", ev.meetLink ?? "(none — Google declined a Meet link for this account)");
+  console.log("Meet link :", ev.meetingLink ?? "(none — Google declined a Meet link for this account)");
   console.log("→ Check your Google Calendar, confirm it appears (with the Meet link), then delete it.");
 }

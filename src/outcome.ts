@@ -33,10 +33,13 @@ export function classifyCall(
   currentRetryCount: number,
   rules: RetryRules,
   now: Date,
+  durationSeconds?: number | null,
 ): LeadOutcome {
   const nowIso = now.toISOString();
+  // < 8s pickup is a machine answer / accidental connect — treat as no_answer so we retry.
+  const shortPickup = typeof durationSeconds === "number" && durationSeconds < 8;
 
-  if (!isAnswered(result.endedReason)) {
+  if (!isAnswered(result.endedReason) || shortPickup) {
     const retry_count = currentRetryCount + 1;
     const exhausted = retry_count >= rules.max_attempts;
     return {

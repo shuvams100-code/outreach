@@ -67,11 +67,30 @@ export function timezoneFromPhone(phone: string): string | null {
   return AREA_TZ[area] ?? null;
 }
 
+// State abbreviation → primary IANA timezone. Used when a physical address state is known, since a
+// mobile number from NY can ring someone living in CA — physical address wins over area code.
+// ponytail: states that span zones (IN, KY, TN, ND, SD, NE, KS, TX) use the majority-population zone.
+const STATE_TZ: Record<string, string> = {
+  AL: CT, AK: AK, AZ: AZ, AR: CT, CA: PT, CO: MT, CT: ET, DE: ET, FL: ET,
+  GA: ET, HI: HI, ID: MT, IL: CT, IN: ET, IA: CT, KS: CT, KY: ET, LA: CT,
+  ME: ET, MD: ET, MA: ET, MI: ET, MN: CT, MS: CT, MO: CT, MT: MT, NE: CT,
+  NV: PT, NH: ET, NJ: ET, NM: MT, NY: ET, NC: ET, ND: CT, OH: ET, OK: CT,
+  OR: PT, PA: ET, RI: ET, SC: ET, SD: CT, TN: CT, TX: CT, UT: MT, VT: ET,
+  VA: ET, WA: PT, WV: ET, WI: CT, WY: MT, DC: ET,
+};
+
+export function timezoneFromState(state: string | null | undefined): string | null {
+  if (!state) return null;
+  return STATE_TZ[state.trim().toUpperCase()] ?? null;
+}
+
 // ---- network helpers ----
 
 async function fetchSiteText(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    // Many scraped/uploaded sites lack a protocol ("acme.com") — fetch() throws on those. Prepend https.
+    const full = url.includes("://") ? url : "https://" + url;
+    const res = await fetch(full, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const html = await res.text();
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
@@ -88,10 +107,12 @@ export function extractEmail(text: string): string | null {
 // Free OpenRouter models, verified 200 via scripts/probe-llm.ts (2026-06-25).
 // Two different providers so one being 429-rate-limited rolls to the other.
 // ponytail: re-run the probe and swap IDs here if they ever 404/429 permanently.
-const LLM_MODELS = [
+const LLM_MODELS_FREE = [
   "openai/gpt-oss-120b:free",
   "openai/gpt-oss-20b:free",
 ];
+// Paid fallback: only used when ALL free models are rate-limited on both passes.
+const LLM_MODEL_PAID = "openai/gpt-4o-mini";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -144,26 +165,23 @@ Return this exact JSON shape:
   "fits_icp": ${fitsRule}
 }`;
 
-  // Two passes: pass 0 tries every model; if all are 429, a short backoff then pass 1.
+  const tryModel = async (model: string) => {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "https://outreach.ai" },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], response_format: { type: "json_object" } }),
+      signal: AbortSignal.timeout(25000),
+    });
+    return res;
+  };
+
+  // Two passes on free models: pass 0 tries all; if all 429, short backoff then pass 1.
   for (let pass = 0; pass < 2; pass++) {
     let all429 = true;
-    for (const model of LLM_MODELS) {
+    for (const model of LLM_MODELS_FREE) {
       try {
-        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${key}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://outreach.ai",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-          }),
-          signal: AbortSignal.timeout(25000),
-        });
-        if (res.status === 429) continue; // rate-limited — try the next provider
+        const res = await tryModel(model);
+        if (res.status === 429) continue;
         all429 = false;
         if (!res.ok) continue;
         const data = await res.json() as { choices?: { message?: { content?: string } }[] };
@@ -172,13 +190,24 @@ Return this exact JSON shape:
         const parsed = parseJsonLoose(content);
         if (parsed) return parsed;
       } catch {
-        all429 = false; // a throw isn't a rate-limit; don't wait on it
+        all429 = false;
         continue;
       }
     }
     if (pass === 0 && all429) await sleep(4000);
-    else break; // nothing left to gain from a second pass
+    else break;
   }
+
+  // Paid fallback: free models exhausted — use a cheap paid model rather than lose the lead.
+  try {
+    const res = await tryModel(LLM_MODEL_PAID);
+    if (res.ok) {
+      const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+      const content = data.choices?.[0]?.message?.content;
+      if (content) return parseJsonLoose(content);
+    }
+  } catch { /* paid model also failed — return null below */ }
+
   return null;
 }
 
@@ -232,7 +261,8 @@ export type EnrichUpdate = {
 // lead `new` so a re-run retries it (never fake-mark it `enriched` on empty results).
 // `icpDescription` (per-account) decides what counts as a fitting lead — no industry hardcoded.
 export async function enrichLead(lead: Lead, icpDescription?: string | null): Promise<EnrichUpdate | null> {
-  const timezone = timezoneFromPhone(lead.phone);
+  // Physical address state is more reliable than area code for mobile numbers (1.2).
+  const timezone = timezoneFromState(lead.address_state) ?? timezoneFromPhone(lead.phone);
   const website = (lead.raw_data?.website as string | null | undefined) ?? null;
   let profile: LLMProfile | null = null;
 

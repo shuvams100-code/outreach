@@ -36,9 +36,8 @@ const lastWeekday = (y: number, m: number, weekday: number) => {
   return days - ((dow(y, m, days) - weekday + 7) % 7);
 };
 
-// The 11 US federal holidays (month is 1-12). Observed-day shifting (Sat→Fri/Sun→Mon) is left out —
-// ponytail: businesses care about the actual day; add observed shift if a client needs it.
-export function isUsFederalHoliday(y: number, m: number, d: number): boolean {
+// The 11 US federal holidays on their actual date (month is 1-12).
+function isActualHoliday(y: number, m: number, d: number): boolean {
   if (m === 1 && d === 1) return true;                       // New Year's
   if (m === 6 && d === 19) return true;                      // Juneteenth
   if (m === 7 && d === 4) return true;                       // Independence Day
@@ -53,6 +52,16 @@ export function isUsFederalHoliday(y: number, m: number, d: number): boolean {
   return false;
 }
 
+// True if the date is a federal holiday OR its OBSERVED bank-closure day: a holiday on Saturday is
+// observed the Friday before, on Sunday the Monday after (when offices are actually shut).
+export function isUsFederalHoliday(y: number, m: number, d: number): boolean {
+  if (isActualHoliday(y, m, d)) return true;
+  const wd = dow(y, m, d);
+  if (wd === 5) { const t = new Date(Date.UTC(y, m - 1, d + 1)); if (isActualHoliday(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate())) return true; } // Fri: Sat-holiday observed today
+  if (wd === 1) { const t = new Date(Date.UTC(y, m - 1, d - 1)); if (isActualHoliday(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate())) return true; } // Mon: Sun-holiday observed today
+  return false;
+}
+
 // ---------- pure: is it a legal moment to call THIS lead (their local time)? ----------
 
 // Mon–Fri, not a US federal holiday, and within [startHour, endHour) in the lead's own timezone.
@@ -62,16 +71,16 @@ export function isWithinCallingWindow(
   endHour: number,
   now: Date,
 ): boolean {
-  const tz = timezone ?? "America/New_York";
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    weekday: "short",
-    hour: "2-digit",
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
+  const opts: Intl.DateTimeFormatOptions = {
+    weekday: "short", hour: "2-digit", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
+  };
+  // A bad/misspelled IANA timezone in the DB makes Intl throw — fall back rather than crash the whole run.
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone ?? "America/New_York", ...opts }).formatToParts(now);
+  } catch {
+    parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", ...opts }).formatToParts(now);
+  }
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   const weekday = get("weekday");
   if (["Sat", "Sun"].includes(weekday)) return false;
@@ -96,11 +105,14 @@ const hourOf = (t: string | null | undefined, fallback: number) =>
 export async function runDailyAccount(accountId: string, now: Date = new Date()) {
   const { data: acct, error } = await supabase
     .from("accounts")
-    .select("status, daily_dial_cap, retry_rules, calling_hours_start, calling_hours_end, booking_capacity")
+    .select("status, daily_dial_cap, retry_rules, calling_hours_start, calling_hours_end, booking_capacity, balance")
     .eq("id", accountId)
     .single();
   if (error || !acct) throw new Error(`Account ${accountId} not found: ${error?.message}`);
   if (acct.status !== "active") return { skipped: "account not active" as const };
+  if (typeof acct.balance === "number" && acct.balance <= 0) {
+    return { skipped: "insufficient balance" as const };
+  }
 
   // Capacity throttle: if open bookings already meet the client's ceiling, stop producing more.
   const { count: openBookings } = await supabase
@@ -112,6 +124,15 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
     return { skipped: "at booking capacity" as const, openBookings: openBookings ?? 0, capacity: acct.booking_capacity };
   }
 
+  // Reap leads stranded in `calling` by a crashed/killed run (older than an hour) → back to scrubbed,
+  // so they're never orphaned out of the queue. (A live call is <5 min, so 1h is a safe threshold.)
+  await supabase
+    .from("leads")
+    .update({ state: "scrubbed" })
+    .eq("account_id", accountId)
+    .eq("state", "calling")
+    .lt("last_called_at", new Date(now.getTime() - 3_600_000).toISOString());
+
   const rules = (acct.retry_rules as RetryRules) ?? { max_attempts: 3, gap_days: 3 };
   const cap = acct.daily_dial_cap ?? 40;
   const share = (acct.retry_rules as { max_share?: number })?.max_share ?? 0.4;
@@ -119,6 +140,7 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
   const endHour = hourOf(acct.calling_hours_end as string, 18);
   const nowIso = now.toISOString();
 
+  const retryCap = Math.ceil(cap * share);
   const [{ data: retriesDue }, { data: fresh }] = await Promise.all([
     supabase
       .from("leads")
@@ -127,13 +149,15 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
       .eq("state", "no_answer")
       .lt("retry_count", rules.max_attempts)
       .lte("next_retry_at", nowIso)
-      .order("next_retry_at", { ascending: true }),
+      .order("next_retry_at", { ascending: true })
+      .limit(retryCap),
     supabase
       .from("leads")
       .select("id, phone, first_name, timezone")
       .eq("account_id", accountId)
       .eq("state", "scrubbed")
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      .limit(cap),
   ]);
 
   const { list, retries, fresh: freshN, retryOverflow } = selectCallList(
@@ -146,13 +170,13 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
   // Only dial leads whose local calling window is open right now.
   const callable = list.filter((l) => isWithinCallingWindow(l.timezone, startHour, endHour, now));
 
-  let booked = 0, noAnswer = 0, notInterested = 0, errors = 0;
+  // callContact is fire-and-forget: it places the call and returns. Outcomes arrive via the VAPI
+  // end-of-call webhook (processVapiCallEnd in webhook-vapi.ts), not inline here.
+  let dialed = 0, errors = 0;
   for (const lead of callable) {
     try {
-      const r = await callContact(accountId, lead.id);
-      if (r.outcome === "booked") booked++;
-      else if (r.outcome === "no_answer") noAnswer++;
-      else notInterested++;
+      await callContact(accountId, lead.id);
+      dialed++;
     } catch (e) {
       errors++;
       console.error(`Call to ${lead.id} failed:`, (e as Error).message);
@@ -165,10 +189,7 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
     fresh: freshN,
     retryOverflow,
     outsideWindow: list.length - callable.length,
-    dialed: callable.length,
-    booked,
-    noAnswer,
-    notInterested,
+    dialed,
     errors,
   };
 }

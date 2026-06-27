@@ -1,5 +1,5 @@
 import { supabase } from "./lib/supabase";
-import { classifyCall, type RetryRules, type VapiResult } from "./outcome";
+import type { RetryRules } from "./outcome";
 
 const VAPI_BASE = "https://api.vapi.ai";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -71,9 +71,10 @@ export async function placeCall(
       phoneNumberId,
       customer: { number: toNumber, ...(name ? { name } : {}) },
       assistant: account.vapi_assistant,
-      // Stamp who this call is for, so the booking tools resolve the right account mid-call.
+      // ponytail: amd routes voicemail to endedReason "voicemail" → no_answer retry (not_interested burn).
+      // Verify field name at api.vapi.ai/api#/Calls/CallController_create if this has no effect.
+      amd: { enabled: true },
       ...(metadata ? { metadata } : {}),
-      // Per-call tweaks (e.g. a reminder call's opening line) without a separate assistant.
       ...(assistantOverrides ? { assistantOverrides } : {}),
     }),
   });
@@ -95,8 +96,9 @@ export type CallResult = {
   analysis?: { structuredData?: { outcome?: string } };
 };
 
-// Poll until the call ends (local dev — production will use VAPI end-of-call webhooks).
-// ponytail: polling, not webhooks; swap to a webhook handler once deployed to Vercel.
+// Poll until the call ends. Used for local dev / scripts — production uses the VAPI end-of-call webhook.
+// ponytail: polling blocks for up to 4 min. Wire up POST /api/webhook/vapi → processVapiCallEnd (webhook-vapi.ts)
+// and remove this call from callContact before deploying to Vercel.
 export async function pollCall(callId: string, timeoutMs = 240000, intervalMs = 5000): Promise<CallResult> {
   const key = process.env.VAPI_API_KEY;
   const start = Date.now();
@@ -110,60 +112,86 @@ export async function pollCall(callId: string, timeoutMs = 240000, intervalMs = 
   throw new Error(`Call ${callId} did not end within ${timeoutMs / 1000}s`);
 }
 
-// Full outbound cycle for one contact: place → wait → classify → log to `calls` → update lead.
-// The orchestration (DB + VAPI); the pure decision lives in classifyCall (outcome.ts, unit-tested).
-export async function callContact(accountId: string, leadId: string) {
+// Minimal inline calling-window check — re-checks just before dialing in case the window closed
+// during a long run. Avoids a circular import with daily.ts (which imports callContact).
+function isCurrentlyCallable(timezone: string | null | undefined, startHour: number, endHour: number): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone ?? "America/New_York",
+      weekday: "short", hour: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date());
+    const weekday = parts.find(p => p.type === "weekday")?.value ?? "";
+    if (["Sat", "Sun"].includes(weekday)) return false;
+    const hour = parseInt(parts.find(p => p.type === "hour")?.value ?? "0", 10);
+    return hour >= startHour && hour < endHour;
+  } catch {
+    return false; // unknown timezone → don't dial
+  }
+}
+
+// Full outbound cycle for one contact: compliance checks → place call → return.
+// Outcome processing (classify → log → update lead) happens in processVapiCallEnd (webhook-vapi.ts)
+// when VAPI fires its end-of-call webhook. This keeps callContact non-blocking (Vercel-safe).
+export async function callContact(accountId: string, leadId: string): Promise<void> {
   const { data: acct, error: aErr } = await supabase
     .from("accounts")
-    .select("vapi_phone_numbers, vapi_assistant, retry_rules, broker_knowledge_base")
+    .select("vapi_phone_numbers, vapi_assistant, retry_rules, broker_knowledge_base, first_message, calling_hours_start, calling_hours_end")
     .eq("id", accountId)
     .single();
   if (aErr || !acct) throw new Error(`Account ${accountId} not found: ${aErr?.message}`);
-  const rules = (acct.retry_rules as RetryRules) ?? DEFAULT_RETRY;
 
   const { data: lead, error: lErr } = await supabase
     .from("leads")
-    .select("id, phone, first_name, retry_count, business_name, business_profile")
+    .select("id, phone, first_name, retry_count, business_name, business_profile, timezone")
     .eq("id", leadId)
     .eq("account_id", accountId)
     .single();
   if (lErr || !lead) throw new Error(`Lead ${leadId} not found: ${lErr?.message}`);
 
-  await supabase.from("leads").update({ state: "calling" }).eq("id", leadId);
+  // 1.1 JIT DNC: re-check opt_outs right before dialing (prospect may have opted out after scrubbing).
+  const { data: blocked } = await supabase
+    .from("opt_outs").select("id").eq("account_id", accountId).eq("phone", lead.phone).maybeSingle();
+  if (blocked) {
+    await supabase.from("leads").update({ state: "disqualified" }).eq("id", leadId);
+    return;
+  }
 
-  // Hand the agent the business knowledge + what we researched about this specific lead.
+  // 1.3 JIT timezone safety: window may have closed since the list was built (long-running dial cycle).
+  const startHour = parseInt(String(acct.calling_hours_start ?? "09:00").split(":")[0], 10);
+  const endHour = parseInt(String(acct.calling_hours_end ?? "18:00").split(":")[0], 10);
+  if (!isCurrentlyCallable(lead.timezone, startHour, endHour)) return;
+
+  // Stamp last_called_at as we enter `calling` so a crashed run leaves a timestamp the reaper can find.
+  await supabase.from("leads").update({ state: "calling", last_called_at: new Date().toISOString() }).eq("id", leadId);
+
   const overrides = buildCallOverrides(acct.vapi_assistant as Record<string, any> | null, {
     knowledgeBase: acct.broker_knowledge_base as string | null,
     businessName: lead.business_name,
     profile: lead.business_profile,
   });
-  const callId = await placeCall(acct as CallAccount, lead.phone, lead.first_name ?? undefined, { account_id: accountId, lead_id: leadId }, overrides);
-  const result = await pollCall(callId);
 
-  const now = new Date();
-  const { outcome, lead: leadUpdate } = classifyCall(result as VapiResult, lead.retry_count ?? 0, rules, now);
+  // 2.4 Outbound firstMessage: override the assistant's default (which may be the inbound greeting)
+  // with the account's outbound opening line so cold prospects hear the right thing.
+  const firstMessageOverride = acct.first_message
+    ? { firstMessage: acct.first_message as string }
+    : undefined;
 
-  const duration = result.startedAt && result.endedAt
-    ? Math.round((Date.parse(result.endedAt) - Date.parse(result.startedAt)) / 1000)
-    : null;
+  const assistantOverrides = (overrides || firstMessageOverride)
+    ? { ...overrides, ...firstMessageOverride }
+    : undefined;
 
-  const { error: cErr } = await supabase.from("calls").insert({
-    account_id: accountId,
-    lead_id: leadId,
-    vapi_call_id: callId,
-    caller_id_used: (acct.vapi_phone_numbers as string[])?.[0] ?? null,
-    outcome,
-    duration_seconds: duration,
-    cost: result.cost ?? null,
-    transcript: result.transcript ?? null,
-    recording_url: result.recordingUrl ?? null,
-    started_at: result.startedAt ?? null,
-    ended_at: result.endedAt ?? null,
-  });
-  if (cErr) throw new Error(`Saving call failed: ${cErr.message}`);
-
-  const { error: uErr } = await supabase.from("leads").update(leadUpdate).eq("id", leadId);
-  if (uErr) throw new Error(`Updating lead failed: ${uErr.message}`);
-
-  return { callId, outcome, leadState: leadUpdate.state };
+  // 3.4 State rollback: if VAPI rejects the call (bad key, zero balance) revert to scrubbed so
+  // this lead isn't permanently orphaned in `calling`.
+  try {
+    await placeCall(
+      acct as CallAccount,
+      lead.phone,
+      lead.first_name ?? undefined,
+      { account_id: accountId, lead_id: leadId },
+      assistantOverrides,
+    );
+  } catch (err) {
+    await supabase.from("leads").update({ state: "scrubbed" }).eq("id", leadId);
+    throw err; // re-throw so the daily runner counts it as an error
+  }
 }

@@ -52,6 +52,10 @@ assert.equal(isUsFederalHoliday(2026, 11, 26), true);  // Thanksgiving — 4th T
 assert.equal(isUsFederalHoliday(2026, 12, 25), true);  // Christmas
 assert.equal(isUsFederalHoliday(2026, 3, 17), false);  // ordinary day
 assert.equal(isUsFederalHoliday(2026, 11, 27), false); // day after Thanksgiving — not federal
+// observed shifts: Jul 4 2026 is a Saturday → observed Fri Jul 3; Jan 1 2023 is a Sunday → observed Mon Jan 2
+assert.equal(isUsFederalHoliday(2026, 7, 3), true);
+assert.equal(isUsFederalHoliday(2023, 1, 2), true);
+assert.equal(isUsFederalHoliday(2026, 7, 10), false);  // an ordinary Friday, nowhere near a holiday
 console.log("isUsFederalHoliday: ok");
 
 // --- atCapacity ---

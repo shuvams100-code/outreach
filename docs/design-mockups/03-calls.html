@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reacher AI — Calls</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css">
+<style>
+  :root { --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+  body { margin:0; padding:24px; background:#DDE1E8; font-family: var(--font-sans); }
+  .wrap { max-width: 760px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div style="background:#EEF0F4; border-radius:16px; padding:14px;">
+<div style="display:flex; border:1px solid #E2E5EA; border-radius:14px; overflow:hidden; background:#F7F8FA; font-family:var(--font-sans);">
+  <div style="width:46px; flex:none; background:#FFFFFF; border-right:1px solid #ECEEF2; display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:18px;">
+    <div style="width:28px; height:28px; border-radius:8px; background:#6366F1; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font-weight:500; font-size:14px;">R</div>
+    <i class="ti ti-layout-dashboard" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-phone" style="font-size:20px; color:#6366F1;" aria-hidden="true"></i>
+    <i class="ti ti-users" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-calendar" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-target-arrow" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-settings" style="font-size:20px; color:#A8AEBC; margin-top:auto;" aria-hidden="true"></i>
+  </div>
+  <div style="flex:1; min-width:0; padding:16px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <div><div style="font-size:17px; font-weight:500; color:#1F2433;">Calls</div><div style="font-size:12px; color:#8A90A0;">Every call, searchable</div></div>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <div style="flex:1; display:flex; align-items:center; gap:7px; background:#FFFFFF; border:1px solid #ECEEF2; border-radius:9px; padding:7px 11px; font-size:12px; color:#A8AEBC;"><i class="ti ti-search" style="font-size:15px;" aria-hidden="true"></i>Search by contact or number</div>
+      <div style="display:flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid #ECEEF2; border-radius:9px; padding:7px 11px; font-size:12px; color:#5A6072;">Outcome: All <i class="ti ti-chevron-down" style="font-size:14px;" aria-hidden="true"></i></div>
+      <div style="display:flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid #ECEEF2; border-radius:9px; padding:7px 11px; font-size:12px; color:#5A6072;"><i class="ti ti-calendar" style="font-size:14px;" aria-hidden="true"></i>Today</div>
+    </div>
+    <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; overflow:hidden;">
+      <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
+        <thead><tr style="color:#A0A6B4; font-size:11px; text-align:left;">
+          <th style="font-weight:400; padding:8px 12px; width:30%;">Contact</th>
+          <th style="font-weight:400; padding:8px 6px; width:20%;">Direction</th>
+          <th style="font-weight:400; padding:8px 6px; width:22%;">Outcome</th>
+          <th style="font-weight:400; padding:8px 6px; width:14%;">Duration</th>
+          <th style="font-weight:400; padding:8px 12px; width:14%;">Time</th>
+        </tr></thead>
+        <tbody style="color:#1F2433;">
+          <tr><td style="padding:9px 12px;">Sarah Jenkins</td><td style="padding:9px 6px; color:#5A6072;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#6366F1;" aria-hidden="true"></i> Outbound</td><td style="padding:9px 6px;"><span style="background:#E4F6EE; color:#0F6E56; padding:2px 7px; border-radius:20px; font-size:11px;">Booked</span></td><td style="padding:9px 6px; color:#5A6072;">2m 14s</td><td style="padding:9px 12px; color:#8A90A0;">2:40 PM</td></tr>
+          <tr style="border-top:1px solid #ECEEF2;"><td style="padding:9px 12px;">David Chen</td><td style="padding:9px 6px; color:#5A6072;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i> Outbound</td><td style="padding:9px 6px;"><span style="background:#FBEFD9; color:#854F0B; padding:2px 7px; border-radius:20px; font-size:11px;">Not interested</span></td><td style="padding:9px 6px; color:#5A6072;">0m 48s</td><td style="padding:9px 12px; color:#8A90A0;">2:31 PM</td></tr>
+          <tr style="border-top:1px solid #ECEEF2;"><td style="padding:9px 12px;">Incoming · 415-555-0199</td><td style="padding:9px 6px; color:#5A6072;"><i class="ti ti-arrow-down-left" style="font-size:13px; color:#0F6E56;" aria-hidden="true"></i> Inbound</td><td style="padding:9px 6px;"><span style="background:#E4F6EE; color:#0F6E56; padding:2px 7px; border-radius:20px; font-size:11px;">Booked</span></td><td style="padding:9px 6px; color:#5A6072;">3m 02s</td><td style="padding:9px 12px; color:#8A90A0;">2:18 PM</td></tr>
+          <tr style="border-top:1px solid #ECEEF2;"><td style="padding:9px 12px;">Marcus Johnson</td><td style="padding:9px 6px; color:#5A6072;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i> Outbound</td><td style="padding:9px 6px;"><span style="background:#F1F2F5; color:#5A6072; padding:2px 7px; border-radius:20px; font-size:11px;">Voicemail</span></td><td style="padding:9px 6px; color:#5A6072;">0m 09s</td><td style="padding:9px 12px; color:#8A90A0;">2:05 PM</td></tr>
+          <tr style="border-top:1px solid #ECEEF2;"><td style="padding:9px 12px;">Priya Nair</td><td style="padding:9px 6px; color:#5A6072;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i> Outbound</td><td style="padding:9px 6px;"><span style="background:#F1F2F5; color:#5A6072; padding:2px 7px; border-radius:20px; font-size:11px;">No answer</span></td><td style="padding:9px 6px; color:#5A6072;">—</td><td style="padding:9px 12px; color:#8A90A0;">1:52 PM</td></tr>
+          <tr style="border-top:1px solid #ECEEF2;"><td style="padding:9px 12px;">Tom Becker</td><td style="padding:9px 6px; color:#5A6072;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i> Outbound</td><td style="padding:9px 6px;"><span style="background:#E4F6EE; color:#0F6E56; padding:2px 7px; border-radius:20px; font-size:11px;">Booked</span></td><td style="padding:9px 6px; color:#5A6072;">1m 57s</td><td style="padding:9px 12px; color:#8A90A0;">1:39 PM</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-top:1px solid #ECEEF2; font-size:11px; color:#8A90A0;"><span>1–6 of 1,240</span><span style="display:flex; gap:6px;"><i class="ti ti-chevron-left" style="font-size:15px;" aria-hidden="true"></i><i class="ti ti-chevron-right" style="font-size:15px;" aria-hidden="true"></i></span></div>
+    </div>
+  </div>
+</div></div>
+</div>
+</body>
+</html>

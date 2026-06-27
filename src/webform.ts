@@ -1,6 +1,8 @@
 import { supabase } from "./lib/supabase";
 import { normalizePhone } from "./upload";
 import { timezoneFromPhone } from "./enrich";
+import { isWithinCallingWindow } from "./daily";
+import { callContact } from "./call";
 
 // Web-form capture: the client points their form / Typeform / website at /webhook/leads/<token>.
 // Each submission becomes a `new`/`scrubbed` lead for that account — same pipeline as upload/scrape.
@@ -47,7 +49,7 @@ export async function handleWebform(token: string, body: Record<string, any>): P
   if (!token) return { ok: false, reason: "missing token" };
   const { data: acct } = await supabase
     .from("accounts")
-    .select("id, enrichment_enabled")
+    .select("id, enrichment_enabled, status, calling_hours_start, calling_hours_end")
     .eq("webhook_token", token)
     .maybeSingle();
   if (!acct) return { ok: false, reason: "unknown token" };
@@ -60,12 +62,25 @@ export async function handleWebform(token: string, body: Record<string, any>): P
     .from("leads").select("id").eq("account_id", acct.id).eq("phone", lead.phone).maybeSingle();
   if (dupe) return { ok: true, reason: "duplicate (ignored)", leadId: dupe.id };
 
-  // Enrich first if the account enriches and we got a website; else straight to the call queue.
-  const website = (lead.raw_data as Record<string, unknown>)?.website;
-  const state = acct.enrichment_enabled && website ? "new" : "scrubbed";
+  // JIT DNC check: webform skips the enrichment/scrub pipeline, so check opt_outs directly.
+  const { data: optOut } = await supabase
+    .from("opt_outs").select("id").eq("account_id", acct.id).eq("phone", lead.phone).maybeSingle();
+  const state = optOut
+    ? "disqualified"
+    : acct.enrichment_enabled && (lead.raw_data as Record<string, unknown>)?.website
+    ? "new"
+    : "scrubbed";
 
   const { data: inserted, error } = await supabase
     .from("leads").insert({ ...lead, state }).select("id").single();
   if (error) return { ok: false, reason: error.message };
+
+  if (state === "scrubbed" && acct.status === "active") {
+    const sH = parseInt(String(acct.calling_hours_start ?? "09:00").split(":")[0], 10);
+    const eH = parseInt(String(acct.calling_hours_end ?? "18:00").split(":")[0], 10);
+    if (isWithinCallingWindow(lead.timezone, sH, eH, new Date())) {
+      void callContact(acct.id, inserted.id).catch((e) => console.error("[webform] speed-to-lead call failed:", e?.message ?? e));
+    }
+  }
   return { ok: true, leadId: inserted.id };
 }

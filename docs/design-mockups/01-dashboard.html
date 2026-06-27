@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reacher AI — Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css">
+<style>
+  :root { --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+  body { margin:0; padding:24px; background:#DDE1E8; font-family: var(--font-sans); }
+  .wrap { max-width: 760px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div style="background:#EEF0F4; border-radius:16px; padding:14px;">
+<div style="display:flex; gap:0; border:1px solid #E2E5EA; border-radius:14px; overflow:hidden; background:#F7F8FA; font-family:var(--font-sans);">
+
+  <div style="width:46px; flex:none; background:#FFFFFF; border-right:1px solid #ECEEF2; display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:18px;">
+    <div style="width:28px; height:28px; border-radius:8px; background:#6366F1; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font-weight:500; font-size:14px;">R</div>
+    <i class="ti ti-layout-dashboard" style="font-size:20px; color:#6366F1;" aria-hidden="true"></i>
+    <i class="ti ti-phone" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-users" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-calendar" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-target-arrow" style="font-size:20px; color:#A8AEBC;" aria-hidden="true"></i>
+    <i class="ti ti-settings" style="font-size:20px; color:#A8AEBC; margin-top:auto;" aria-hidden="true"></i>
+  </div>
+
+  <div style="flex:1; min-width:0; padding:16px;">
+
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <div>
+        <div style="font-size:17px; font-weight:500; color:#1F2433;">Overview</div>
+        <div style="font-size:12px; color:#8A90A0;">Outbound Sales · this billing cycle</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#5A6072;">
+        <span style="display:inline-flex; align-items:center; gap:5px; background:#E4F6EE; color:#0F6E56; padding:4px 9px; border-radius:20px;"><i class="ti ti-circle-filled" style="font-size:8px;" aria-hidden="true"></i>Live</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border:1px solid #E2E5EA; border-radius:20px; background:#FFFFFF;"><i class="ti ti-user" style="font-size:14px;" aria-hidden="true"></i>Acme Realty</span>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1; min-width:0;">
+
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:10px;">
+          <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; padding:10px 12px;">
+            <div style="font-size:11px; color:#8A90A0; display:flex; align-items:center; gap:4px;"><i class="ti ti-cash" style="font-size:13px;" aria-hidden="true"></i>Total spend</div>
+            <div style="font-size:21px; font-weight:500; color:#1F2433; margin-top:3px;">$142.50</div>
+            <div style="font-size:11px; color:#1D9E75;">+8.4% vs last cycle</div>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; padding:10px 12px;">
+            <div style="font-size:11px; color:#8A90A0; display:flex; align-items:center; gap:4px;"><i class="ti ti-clock" style="font-size:13px;" aria-hidden="true"></i>Total minutes</div>
+            <div style="font-size:21px; font-weight:500; color:#1F2433; margin-top:3px;">320</div>
+            <div style="font-size:11px; color:#8A90A0;">1,240 calls placed</div>
+          </div>
+          <div style="background:#FFFFFF; border:2px solid #6366F1; border-radius:12px; padding:10px 12px;">
+            <div style="font-size:11px; color:#8A90A0; display:flex; align-items:center; gap:4px;"><i class="ti ti-calendar-check" style="font-size:13px;" aria-hidden="true"></i>Meetings booked</div>
+            <div style="font-size:21px; font-weight:500; color:#4F46E5; margin-top:3px;">128</div>
+            <div style="font-size:11px; color:#8A90A0;">preset success metric</div>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; padding:10px 12px;">
+            <div style="font-size:11px; color:#8A90A0; display:flex; align-items:center; gap:4px;"><i class="ti ti-phone-call" style="font-size:13px;" aria-hidden="true"></i>Connect rate</div>
+            <div style="font-size:21px; font-weight:500; color:#1F2433; margin-top:3px;">84%</div>
+            <div style="font-size:11px; color:#8A90A0;">human-answered</div>
+          </div>
+        </div>
+
+        <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; padding:8px 12px; margin-bottom:10px; display:flex; align-items:center; gap:12px;">
+          <div style="font-size:11px; color:#8A90A0; white-space:nowrap;">Dials vs bookings<br><span style="font-size:13px; color:#1F2433; font-weight:500;">last 7 days</span></div>
+          <svg viewBox="0 0 320 40" style="flex:1; height:38px;" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="0,30 45,28 90,24 135,25 180,18 225,14 270,10 320,6" fill="none" stroke="#6366F1" stroke-width="2"/>
+            <polyline points="0,36 45,35 90,33 135,34 180,31 225,30 270,28 320,27" fill="none" stroke="#C9CDD6" stroke-width="1.5" stroke-dasharray="3 3"/>
+          </svg>
+          <div style="font-size:11px; color:#8A90A0; text-align:right;">peak<br><span style="font-size:13px; color:#1F2433; font-weight:500;">Wed</span></div>
+        </div>
+
+        <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; overflow:hidden;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #ECEEF2;">
+            <span style="font-size:13px; font-weight:500; color:#1F2433;">Call log</span>
+            <span style="font-size:11px; color:#8A90A0; display:flex; align-items:center; gap:5px;"><i class="ti ti-search" style="font-size:14px;" aria-hidden="true"></i>Recent activity</span>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
+            <thead>
+              <tr style="color:#A0A6B4; font-size:11px; text-align:left;">
+                <th style="font-weight:400; padding:7px 12px; width:38%;">Contact</th>
+                <th style="font-weight:400; padding:7px 6px; width:26%;">Outcome</th>
+                <th style="font-weight:400; padding:7px 6px; width:18%;">Duration</th>
+                <th style="font-weight:400; padding:7px 12px; width:18%;">Time</th>
+              </tr>
+            </thead>
+            <tbody style="color:#1F2433;">
+              <tr style="background:#EEF0FE; border-left:2px solid #6366F1;">
+                <td style="padding:8px 12px;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#6366F1;" aria-hidden="true"></i>Sarah Jenkins</span></td>
+                <td style="padding:8px 6px;"><span style="background:#E4F6EE; color:#0F6E56; padding:2px 7px; border-radius:20px; font-size:11px;">Booked</span></td>
+                <td style="padding:8px 6px; color:#5A6072;">2m 14s</td>
+                <td style="padding:8px 12px; color:#8A90A0;">2:40 PM</td>
+              </tr>
+              <tr style="border-top:1px solid #ECEEF2;">
+                <td style="padding:8px 12px;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i>David Chen</span></td>
+                <td style="padding:8px 6px;"><span style="background:#FBEFD9; color:#854F0B; padding:2px 7px; border-radius:20px; font-size:11px;">Not interested</span></td>
+                <td style="padding:8px 6px; color:#5A6072;">0m 48s</td>
+                <td style="padding:8px 12px; color:#8A90A0;">2:31 PM</td>
+              </tr>
+              <tr style="border-top:1px solid #ECEEF2;">
+                <td style="padding:8px 12px;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-arrow-down-left" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i>Elena Morales</span></td>
+                <td style="padding:8px 6px;"><span style="background:#E4F6EE; color:#0F6E56; padding:2px 7px; border-radius:20px; font-size:11px;">Booked</span></td>
+                <td style="padding:8px 6px; color:#5A6072;">3m 02s</td>
+                <td style="padding:8px 12px; color:#8A90A0;">2:18 PM</td>
+              </tr>
+              <tr style="border-top:1px solid #ECEEF2;">
+                <td style="padding:8px 12px;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i>Marcus Johnson</span></td>
+                <td style="padding:8px 6px;"><span style="background:#F1F2F5; color:#5A6072; padding:2px 7px; border-radius:20px; font-size:11px;">Voicemail</span></td>
+                <td style="padding:8px 6px; color:#5A6072;">0m 09s</td>
+                <td style="padding:8px 12px; color:#8A90A0;">2:05 PM</td>
+              </tr>
+              <tr style="border-top:1px solid #ECEEF2;">
+                <td style="padding:8px 12px;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#A8AEBC;" aria-hidden="true"></i>Priya Nair</span></td>
+                <td style="padding:8px 6px;"><span style="background:#F1F2F5; color:#5A6072; padding:2px 7px; border-radius:20px; font-size:11px;">No answer</span></td>
+                <td style="padding:8px 6px; color:#5A6072;">—</td>
+                <td style="padding:8px 12px; color:#8A90A0;">1:52 PM</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="width:188px; flex:none; display:flex; flex-direction:column; gap:10px;">
+        <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; padding:12px;">
+          <div style="display:flex; align-items:center; gap:7px; margin-bottom:8px;">
+            <div style="width:24px; height:24px; border-radius:7px; background:#EEF0FE; color:#4F46E5; display:flex; align-items:center; justify-content:center;"><i class="ti ti-sparkles" style="font-size:14px;" aria-hidden="true"></i></div>
+            <div style="font-size:13px; font-weight:500; color:#1F2433;">AI advisor</div>
+          </div>
+          <div style="font-size:11px; color:#8A90A0; margin-bottom:8px;">Across 1,240 transcripts</div>
+          <div style="font-size:12px; color:#5A6072; line-height:1.55; border-left:2px solid #6366F1; padding-left:9px; margin-bottom:10px;">40% hung up early saying they already use a competitor.</div>
+          <div style="font-size:12px; color:#5A6072; line-height:1.55; border-left:2px solid #C9CDD6; padding-left:9px;">15% asked to receive details by email first.</div>
+        </div>
+
+        <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:12px; padding:12px;">
+          <div style="font-size:11px; color:#8A90A0; margin-bottom:9px;">Integration health</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1F2433; margin-bottom:8px;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-calendar" style="font-size:14px; color:#A8AEBC;" aria-hidden="true"></i>Google Calendar</span><i class="ti ti-circle-check" style="font-size:15px; color:#1D9E75;" aria-hidden="true"></i></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#1F2433;"><span style="display:flex; align-items:center; gap:6px;"><i class="ti ti-brand-slack" style="font-size:14px; color:#A8AEBC;" aria-hidden="true"></i>Slack alerts</span><i class="ti ti-circle-check" style="font-size:15px; color:#1D9E75;" aria-hidden="true"></i></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+</div>
+</body>
+</html>

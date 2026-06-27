@@ -8,7 +8,6 @@ if ("skipped" in r) {
 } else {
   console.log(
     `Daily run — selected ${r.selected} (${r.retries} retries, ${r.fresh} fresh, ${r.retryOverflow} rolled over) · ` +
-      `dialed ${r.dialed} (${r.outsideWindow} outside calling window) · ` +
-      `${r.booked} booked · ${r.noAnswer} no-answer · ${r.notInterested} not-interested · ${r.errors} errors`,
+      `dialed ${r.dialed} (${r.outsideWindow} outside calling window) · ${r.errors} errors · outcomes via VAPI webhook`,
   );
 }

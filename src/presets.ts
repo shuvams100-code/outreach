@@ -109,6 +109,9 @@ export function buildPresetUpdate(presets: Preset[], voiceId?: string) {
   const sources_enabled = presets.some((p) => p.sources_enabled);
   const scripted = presets.filter((p) => p.system_prompt.trim());
 
+  // Every calling agent must be able to honor a do-not-call request (TCPA) — always include opt-out.
+  if (scripted.length && !enabled_tools.includes("opt_out_customer")) enabled_tools.push("opt_out_customer");
+
   const base: Record<string, unknown> = {
     enabled_tools,
     sources: sources_enabled ? ALL_SOURCES : [],
@@ -143,7 +146,20 @@ export function listPresets() {
   return Object.values(PRESETS).map((p) => ({ key: p.key, label: p.label, description: p.description, category: p.category }));
 }
 
+function deepMerge(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...base };
+  for (const [k, v] of Object.entries(override)) {
+    if (v && typeof v === "object" && !Array.isArray(v) && result[k] && typeof result[k] === "object" && !Array.isArray(result[k])) {
+      result[k] = deepMerge(result[k] as Record<string, unknown>, v as Record<string, unknown>);
+    } else {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
 // Apply one or more presets to an account (composed). Leaves client-specific fields alone.
+// vapi_assistant is deep-merged so custom tools/temperature/etc. the client configured are preserved.
 export async function applyPreset(accountId: string, keys: string | string[], voiceId?: string) {
   const keyList = Array.isArray(keys) ? keys : [keys];
   const presets = keyList.map((k) => {
@@ -152,6 +168,17 @@ export async function applyPreset(accountId: string, keys: string | string[], vo
     return p;
   });
   const update = buildPresetUpdate(presets, voiceId);
+
+  if (update.vapi_assistant) {
+    const { data: existing } = await supabase.from("accounts").select("vapi_assistant").eq("id", accountId).single();
+    if (existing?.vapi_assistant) {
+      update.vapi_assistant = deepMerge(
+        existing.vapi_assistant as Record<string, unknown>,
+        update.vapi_assistant as Record<string, unknown>,
+      );
+    }
+  }
+
   const { error } = await supabase.from("accounts").update(update).eq("id", accountId);
   if (error) throw new Error(`Applying preset(s) failed: ${error.message}`);
   return { applied: presets.map((p) => p.label), enabled_tools: update.enabled_tools, scraping: update.scraping_enabled };

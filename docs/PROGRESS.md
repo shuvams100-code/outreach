@@ -18,6 +18,28 @@ expansion tools** — see the pending list below.
 
 ---
 
+## 🛠️ Robustness fixes (code review, 2026-06-26)
+
+Eight defects from a code review, all fixed + tests green (46): (1A) enrichment now prepends `https://` to
+protocol-less URLs; (1B) booking `notes` now flow into the calendar event; (2A) **calendar id + credentials
+are now per-account** (`accounts.google_calendar_id` / `google_calendar_credentials`, env only a tenant-0
+fallback) — closes the shared-calendar multi-tenant leak; (3B) `calling`-stranded leads are reaped back to
+`scrubbed` after 1h (+ `last_called_at` stamped on entry); (4A) bad IANA timezone falls back instead of
+crashing the run; (4B) availability subtracts open DB bookings too (anti double-book); (4C) `capture_fields`
+salvages flattened LLM args; (4D) federal holidays now observe Sat→Fri / Sun→Mon shifts.
+
+**Still open from that review:** the polling→webhook change (3A) — that's the deploy-step work below.
+**Future enhancement (not a bug):** round-robin across multiple caller-ID numbers for the 40/day cap.
+
+**Second review (product/flow gaps) — 4 of 5 fixed:**
+- **Inbound caller identification** ✅ — `tools.ts` `ensureLead()` resolves the caller by phone (or creates an `inbound` lead) when there's no `lead_id`; booking + capture now attach instead of orphaning. *Proven end-to-end against the server.*
+- **Opt-out mid-call (TCPA)** ✅ — new `opt_out_customer` tool inserts the number into `opt_outs` + disqualifies the lead; auto-enabled for every calling agent via `buildPresetUpdate`. *Proven end-to-end.*
+- **Reschedule ghost booking** ✅ — reminder calls carry the original `booking_id`; on a re-book, `cancelBooking()` deletes the old calendar event + closes the old DB row (frees capacity). (Logic done; live-verify with calls.)
+- **Speed-to-lead** ✅ — web-form leads that are call-ready dial immediately (fire-and-forget) if inside calling hours, instead of waiting for the daily cron. (Becomes a proper background task on Vercel.)
+- **Rate pacing / concurrency** ⏸️ — *not a present bug* (the dialer is sequential today). Real for the async/serverless model; lands with the polling→webhook deploy work (3A).
+
+---
+
 ## ⏳ WHAT'S LEFT (the authoritative pending list)
 
 > Frontend, dashboards, and wiring are known and listed in §E. Everything else, grouped by purpose.
@@ -39,21 +61,28 @@ expansion tools** — see the pending list below.
 Turns the agent from *booking-only* into the whole service menu. Each ending tool is ~Small (same
 pattern as the live-booking tools `check_availability`/`book_appointment`).
 
-| Ending tool | Unlocks (sellable services) | Status |
+> **Design decision (don't re-add these as "todo"):** a *message*, a *complaint/ticket*, a *callback*, and
+> *qualification answers* are all the **same action** — saving structured info — so they're **one tool**
+> (`capture_fields`) distinguished by a `type` field, NOT separate tools. And *answering FAQs* is done by
+> **injecting the knowledge base into the agent's prompt**, not a tool. So the only ending still genuinely
+> unbuilt is `send_link` (needs SMS), and `transfer_to_human` was deliberately dropped.
+
+| Ending capability | Unlocks (sellable services) | Status |
 |---|---|---|
-| `capture_fields` (save structured answers) | Lead Qualification · Surveys · Recruitment Screening · Market Research | ✅ **Built + proven end-to-end** (`src/tools.ts` `handleCaptureFields`; saves to `leads.captured_data`; smoke-tested via the server against a real lead). |
-| `take_message` | AI Receptionist · After-hours answering | ❌ next |
-| `transfer_to_human` (warm transfer) | Receptionist · Live support · High-intent sales | ❌ |
-| `answer_from_kb` (knowledge base) | Tier-1 Support · FAQ deflection | ❌ |
-| `send_link` (SMS/email a link) | Review Generation · Payment reminders · Info send | ❌ |
-| `log_ticket` | Complaint Intake · Helpdesk | ❌ |
+| `capture_fields` (save structured answers) | Lead Qualification · Surveys · Screening · Research | ✅ **Built + proven end-to-end** (`src/tools.ts` `handleCaptureFields` → `leads.captured_data`; server-tested against a real lead). |
+| Take a message | AI Receptionist · After-hours answering | ✅ **Done by design** — it's a `capture_fields` call with `type: "message"`. No separate tool. |
+| Log a ticket / complaint | Complaint Intake · Helpdesk | ✅ **Done by design** — `capture_fields` with `type: "complaint"` (+ order id). No separate tool. |
+| Answer from knowledge base | Tier-1 Support · FAQ deflection | ✅ **Done** — knowledge base injected into the agent's prompt (`src/call.ts` `buildCallOverrides`), not a tool. |
+| `transfer_to_human` (warm transfer) | Live support · high-intent routing | ⏸️ **Dropped by decision** — out of scope; revisit only if a client demands it. |
+| `send_link` (SMS/email a link) | Review Generation · Payment reminders | ❌ **The one genuinely unbuilt ending** — needs an SMS channel (new). Build only when a client needs it. |
 
-**Per-account endings now exist:** `accounts.enabled_tools` (text[]) lists which tools an account's agent
-gets; `src/tools.ts` `toolDefs()` is the registry; `sync-tools` attaches only the enabled subset. A preset
-will later set `enabled_tools` (Sales → booking pair, Qualifier → `capture_fields`, …). This is the
-foundation for the preset layer (item 10).
+**Per-account endings:** `accounts.enabled_tools` (text[]) lists which tools an account's agent gets;
+`src/tools.ts` `toolDefs()` is the registry; `sync-tools` attaches only the enabled subset. The preset layer
+sets `enabled_tools` per use case.
 
-**Build order:** ✅ `capture_fields` done → `take_message` + `transfer_to_human` next (unlocks the Receptionist product, the cleanest/lowest-risk thing to sell). Then the rest.
+**Build order:** ✅ Essentially complete. `capture_fields` covers message/complaint/callback/qualification;
+knowledge-base injection covers FAQ. The Receptionist, Qualifier, and Complaint products are all fully
+deliverable today. Only `send_link` (SMS) remains, and only if a client needs reviews/payment links.
 
 Plus:
 10. ✅ **Use-case preset layer** — `src/presets.ts`: 4 presets (Outbound Sales, AI Receptionist, Lead Qualification, Complaint Intake). `applyPreset(accountId, key)` stamps endings + sources + agent script + success definition; leaves client-specific fields manual. `npm run preset` lists; `npm run preset -- <key> <accountId>` applies. Pure builder unit-tested. (Vision: [[project-usecase-presets]].)

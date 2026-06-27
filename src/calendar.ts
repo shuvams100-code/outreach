@@ -3,22 +3,49 @@ import { google } from "googleapis";
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 
-function getCalendar() {
-  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!keyPath) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY in .env");
-  const creds = JSON.parse(readFileSync(keyPath, "utf8")) as { client_email: string; private_key: string };
-  const auth = new google.auth.JWT({ email: creds.client_email, key: creds.private_key, scopes: SCOPES });
+// Service-account credentials. Per-account creds (from accounts.google_calendar_credentials) keep tenants
+// isolated; falls back to the env key file for tenant-0 / local dev. NEVER share one calendar across clients.
+export type ServiceAccountCreds = { client_email: string; private_key: string };
+// OAuth credentials — required for consumer Gmail accounts (service accounts can't invite external guests).
+export type OAuthCreds = { client_id: string; client_secret: string; refresh_token: string };
+export type GCreds = ServiceAccountCreds | OAuthCreds;
+
+function isOAuth(c: GCreds): c is OAuthCreds {
+  return "refresh_token" in c;
+}
+
+function getCalendar(credentials?: GCreds | null) {
+  let creds = credentials;
+  if (!creds) {
+    const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (!keyPath) throw new Error("No calendar credentials: account has none and GOOGLE_SERVICE_ACCOUNT_KEY is unset");
+    creds = JSON.parse(readFileSync(keyPath, "utf8")) as GCreds;
+  }
+  let auth;
+  if (isOAuth(creds)) {
+    // OAuth: client's personal Google account — can invite external guests, required for consumer Gmail.
+    const oauth = new google.auth.OAuth2(creds.client_id, creds.client_secret);
+    oauth.setCredentials({ refresh_token: creds.refresh_token });
+    auth = oauth;
+  } else {
+    auth = new google.auth.JWT({ email: creds.client_email, key: creds.private_key, scopes: SCOPES });
+  }
   return google.calendar({ version: "v3", auth });
 }
 
 export type BusyBlock = { start: string; end: string };
 
-export async function getBusy(calendarId: string, timeMin: Date, timeMax: Date): Promise<BusyBlock[]> {
-  const cal = getCalendar();
-  const res = await cal.freebusy.query({
-    requestBody: { timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), items: [{ id: calendarId }] },
-  });
-  return (res.data.calendars?.[calendarId]?.busy ?? []).map((b) => ({ start: b.start!, end: b.end! }));
+export async function getBusy(calendarId: string, timeMin: Date, timeMax: Date, credentials?: GCreds | null): Promise<BusyBlock[]> {
+  try {
+    const cal = getCalendar(credentials);
+    const res = await cal.freebusy.query({
+      requestBody: { timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), items: [{ id: calendarId }] },
+    });
+    return (res.data.calendars?.[calendarId]?.busy ?? []).map((b) => ({ start: b.start!, end: b.end! }));
+  } catch (e: any) {
+    console.error("[calendar] getBusy failed:", e?.message ?? e);
+    return []; // degrade gracefully — availability check continues without calendar data
+  }
 }
 
 // ---------- pure timezone-aware slot math (unit-tested) ----------
@@ -88,15 +115,20 @@ export function computeFreeSlots(busy: BusyBlock[], o: SlotOpts): string[] {
 }
 
 // ---------- write an event ----------
-// Consumer Gmail + service account can't mint Google Meet links via the API (Workspace-only), so the
-// meeting link is a static per-account link (Meet room / Zoom) dropped into the invite's location.
-// ponytail: no external attendees either (needs domain-wide delegation); event lands on the account's
-// calendar. Both upgrade automatically if the account ever moves to a Google Workspace domain.
 export async function createEvent(
   calendarId: string,
-  e: { summary: string; description?: string; startIso: string; durationMin: number; timezone: string; meetingLink?: string | null },
+  e: {
+    summary: string;
+    description?: string;
+    startIso: string;
+    durationMin: number;
+    timezone: string;
+    meetingLink?: string | null;
+    guestEmail?: string | null;   // added: sends a calendar invite to the prospect
+  },
+  credentials?: GCreds | null,
 ): Promise<{ id: string | null; htmlLink: string | null; meetingLink: string | null }> {
-  const cal = getCalendar();
+  const cal = getCalendar(credentials);
   const start = new Date(e.startIso);
   const end = new Date(start.getTime() + e.durationMin * 60_000);
   const description = e.meetingLink
@@ -104,15 +136,23 @@ export async function createEvent(
     : e.description;
   const res = await cal.events.insert({
     calendarId,
+    // sendUpdates: "all" emails the prospect their calendar invite when guestEmail is provided.
+    sendUpdates: e.guestEmail ? "all" : "none",
     requestBody: {
       summary: e.summary,
       description,
       location: e.meetingLink ?? undefined,
       start: { dateTime: start.toISOString(), timeZone: e.timezone },
       end: { dateTime: end.toISOString(), timeZone: e.timezone },
-      // Host gets the calendar's own reminders (popup + email) — no separate notification system needed.
+      attendees: e.guestEmail ? [{ email: e.guestEmail }] : undefined,
       reminders: { useDefault: true },
     },
   });
   return { id: res.data.id ?? null, htmlLink: res.data.htmlLink ?? null, meetingLink: e.meetingLink ?? null };
+}
+
+// Delete an event (used when a meeting is rescheduled — kill the old slot so it doesn't ghost).
+export async function deleteEvent(calendarId: string, eventId: string, credentials?: GCreds | null): Promise<void> {
+  const cal = getCalendar(credentials);
+  await cal.events.delete({ calendarId, eventId });
 }

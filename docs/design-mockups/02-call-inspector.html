@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reacher AI — Call inspector</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css">
+<style>
+  :root { --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+  body { margin:0; padding:24px; background:#DDE1E8; font-family: var(--font-sans); }
+  .wrap { max-width: 760px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div style="background:#EEF0F4; border-radius:16px; padding:14px; display:flex; gap:0; min-height:560px; font-family:var(--font-sans);">
+
+  <div style="flex:1; min-width:0; opacity:0.4; padding-right:6px; overflow:hidden;">
+    <div style="font-size:15px; font-weight:500; color:#1F2433; margin-bottom:10px;">Call log</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="background:#FFFFFF; border:2px solid #6366F1; border-radius:10px; height:34px;"></div>
+      <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:10px; height:34px;"></div>
+      <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:10px; height:34px;"></div>
+      <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:10px; height:34px;"></div>
+      <div style="background:#FFFFFF; border:1px solid #ECEEF2; border-radius:10px; height:34px;"></div>
+    </div>
+  </div>
+
+  <div style="width:392px; flex:none; background:#FFFFFF; border:1px solid #E2E5EA; border-radius:14px; overflow:hidden; box-shadow:-8px 0 24px rgba(31,36,51,0.10);">
+
+    <div style="padding:14px 16px; border-bottom:1px solid #ECEEF2; display:flex; align-items:flex-start; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:38px; height:38px; border-radius:50%; background:#EEF0FE; color:#4F46E5; display:flex; align-items:center; justify-content:center; font-weight:500; font-size:14px;">SJ</div>
+        <div>
+          <div style="font-size:15px; font-weight:500; color:#1F2433;">Sarah Jenkins</div>
+          <div style="font-size:12px; color:#8A90A0; display:flex; align-items:center; gap:6px;"><i class="ti ti-arrow-up-right" style="font-size:13px; color:#6366F1;" aria-hidden="true"></i>Outbound · Acme Realty</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="background:#E4F6EE; color:#0F6E56; padding:3px 9px; border-radius:20px; font-size:11px;">Booked</span>
+        <i class="ti ti-x" style="font-size:18px; color:#A8AEBC;" aria-hidden="true"></i>
+      </div>
+    </div>
+
+    <div style="padding:14px 16px; border-bottom:1px solid #ECEEF2;">
+      <div style="display:flex; align-items:center; gap:11px;">
+        <div style="width:34px; height:34px; border-radius:50%; background:#6366F1; color:#FFFFFF; display:flex; align-items:center; justify-content:center; flex:none;"><i class="ti ti-player-play" style="font-size:15px;" aria-hidden="true"></i></div>
+        <svg viewBox="0 0 280 28" style="flex:1; height:26px;" preserveAspectRatio="none" aria-hidden="true">
+          <g fill="#6366F1">
+            <rect x="0" y="10" width="2.5" height="8" rx="1"/><rect x="6" y="7" width="2.5" height="14" rx="1"/><rect x="12" y="4" width="2.5" height="20" rx="1"/><rect x="18" y="9" width="2.5" height="10" rx="1"/><rect x="24" y="6" width="2.5" height="16" rx="1"/><rect x="30" y="11" width="2.5" height="6" rx="1"/><rect x="36" y="5" width="2.5" height="18" rx="1"/><rect x="42" y="8" width="2.5" height="12" rx="1"/><rect x="48" y="3" width="2.5" height="22" rx="1"/><rect x="54" y="9" width="2.5" height="10" rx="1"/><rect x="60" y="7" width="2.5" height="14" rx="1"/><rect x="66" y="11" width="2.5" height="6" rx="1"/><rect x="72" y="6" width="2.5" height="16" rx="1"/><rect x="78" y="9" width="2.5" height="10" rx="1"/>
+          </g>
+          <g fill="#D2D5DE">
+            <rect x="84" y="5" width="2.5" height="18" rx="1"/><rect x="90" y="10" width="2.5" height="8" rx="1"/><rect x="96" y="7" width="2.5" height="14" rx="1"/><rect x="102" y="4" width="2.5" height="20" rx="1"/><rect x="108" y="9" width="2.5" height="10" rx="1"/><rect x="114" y="6" width="2.5" height="16" rx="1"/><rect x="120" y="11" width="2.5" height="6" rx="1"/><rect x="126" y="8" width="2.5" height="12" rx="1"/><rect x="132" y="5" width="2.5" height="18" rx="1"/><rect x="138" y="10" width="2.5" height="8" rx="1"/><rect x="144" y="7" width="2.5" height="14" rx="1"/><rect x="150" y="9" width="2.5" height="10" rx="1"/><rect x="156" y="6" width="2.5" height="16" rx="1"/><rect x="162" y="11" width="2.5" height="6" rx="1"/><rect x="168" y="4" width="2.5" height="20" rx="1"/><rect x="174" y="9" width="2.5" height="10" rx="1"/><rect x="180" y="7" width="2.5" height="14" rx="1"/><rect x="186" y="10" width="2.5" height="8" rx="1"/><rect x="192" y="5" width="2.5" height="18" rx="1"/><rect x="198" y="9" width="2.5" height="10" rx="1"/><rect x="204" y="6" width="2.5" height="16" rx="1"/><rect x="210" y="11" width="2.5" height="6" rx="1"/><rect x="216" y="8" width="2.5" height="12" rx="1"/><rect x="222" y="5" width="2.5" height="18" rx="1"/><rect x="228" y="10" width="2.5" height="8" rx="1"/><rect x="234" y="7" width="2.5" height="14" rx="1"/><rect x="240" y="9" width="2.5" height="10" rx="1"/><rect x="246" y="6" width="2.5" height="16" rx="1"/><rect x="252" y="11" width="2.5" height="6" rx="1"/><rect x="258" y="4" width="2.5" height="20" rx="1"/><rect x="264" y="9" width="2.5" height="10" rx="1"/><rect x="270" y="7" width="2.5" height="14" rx="1"/>
+          </g>
+        </svg>
+        <span style="font-size:11px; color:#8A90A0; flex:none;">0:41 / 2:14</span>
+      </div>
+    </div>
+
+    <div style="padding:12px 16px; border-bottom:1px solid #ECEEF2; display:grid; grid-template-columns:1fr 1fr; gap:10px 12px;">
+      <div><div style="font-size:11px; color:#8A90A0;">Cost</div><div style="font-size:13px; color:#1F2433; font-weight:500;">$0.42</div></div>
+      <div><div style="font-size:11px; color:#8A90A0;">Duration</div><div style="font-size:13px; color:#1F2433; font-weight:500;">134 sec</div></div>
+      <div><div style="font-size:11px; color:#8A90A0;">Caller ID used</div><div style="font-size:13px; color:#1F2433; font-weight:500;">+1 (512) 555-0143</div></div>
+      <div><div style="font-size:11px; color:#8A90A0;">Time</div><div style="font-size:13px; color:#1F2433; font-weight:500;">Today, 2:40 PM</div></div>
+    </div>
+
+    <div style="padding:14px 16px; border-bottom:1px solid #ECEEF2;">
+      <div style="font-size:11px; color:#8A90A0; margin-bottom:11px; display:flex; align-items:center; gap:6px;"><i class="ti ti-message-2" style="font-size:14px;" aria-hidden="true"></i>Transcript</div>
+
+      <div style="display:flex; gap:8px; margin-bottom:11px;">
+        <div style="width:22px; height:22px; border-radius:50%; background:#EEF0FE; color:#4F46E5; display:flex; align-items:center; justify-content:center; flex:none; font-size:11px;"><i class="ti ti-robot" style="font-size:13px;" aria-hidden="true"></i></div>
+        <div style="background:#F4F5F8; border-radius:3px 12px 12px 12px; padding:8px 11px; font-size:12px; color:#3A4052; line-height:1.5;">Hi Sarah, this is Alex from Acme Realty — did I catch you at an okay moment?</div>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-direction:row-reverse; margin-bottom:11px;">
+        <div style="width:22px; height:22px; border-radius:50%; background:#E4F6EE; color:#0F6E56; display:flex; align-items:center; justify-content:center; flex:none; font-size:11px;">SJ</div>
+        <div style="background:#EEF0FE; border-radius:12px 3px 12px 12px; padding:8px 11px; font-size:12px; color:#2C3350; line-height:1.5;">Sure, I've got a minute. We've actually been looking at the 4-bed in Downtown.</div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:11px;">
+        <div style="width:22px; height:22px; border-radius:50%; background:#EEF0FE; color:#4F46E5; display:flex; align-items:center; justify-content:center; flex:none; font-size:11px;"><i class="ti ti-robot" style="font-size:13px;" aria-hidden="true"></i></div>
+        <div style="background:#F4F5F8; border-radius:3px 12px 12px 12px; padding:8px 11px; font-size:12px; color:#3A4052; line-height:1.5;">Perfect — I can get you in with an agent this week. Does Thursday at 3:30 work?</div>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-direction:row-reverse;">
+        <div style="width:22px; height:22px; border-radius:50%; background:#E4F6EE; color:#0F6E56; display:flex; align-items:center; justify-content:center; flex:none; font-size:11px;">SJ</div>
+        <div style="background:#EEF0FE; border-radius:12px 3px 12px 12px; padding:8px 11px; font-size:12px; color:#2C3350; line-height:1.5;">Thursday's good. Send it to sarah.j@email.com.</div>
+      </div>
+    </div>
+
+    <div style="padding:14px 16px;">
+      <div style="font-size:11px; color:#8A90A0; margin-bottom:10px; display:flex; align-items:center; gap:6px;"><i class="ti ti-clipboard-data" style="font-size:14px;" aria-hidden="true"></i>Captured data</div>
+      <div style="background:#F7F8FA; border:1px solid #ECEEF2; border-radius:10px; padding:4px 12px;">
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #ECEEF2; font-size:12px;"><span style="color:#8A90A0;">Interest</span><span style="color:#1F2433;">4-bed, Downtown</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #ECEEF2; font-size:12px;"><span style="color:#8A90A0;">Timeline</span><span style="color:#1F2433;">This quarter</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #ECEEF2; font-size:12px;"><span style="color:#8A90A0;">Email</span><span style="color:#4F46E5;">sarah.j@email.com</span></div>
+        <div style="display:flex; justify-content:space-between; padding:7px 0; font-size:12px;"><span style="color:#8A90A0;">Qualified</span><span style="background:#E4F6EE; color:#0F6E56; padding:1px 8px; border-radius:20px; font-size:11px;">Yes</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+</body>
+</html>

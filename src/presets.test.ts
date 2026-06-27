@@ -9,18 +9,19 @@ assert.ok(list.some((p) => p.category === "data"));
 assert.ok(list.some((p) => p.category === "custom"));
 console.log("listPresets: ok");
 
-// single preset → booking endings, scraping on, assistant assembled from the script
+// single preset → booking endings + auto opt-out, scraping on, assistant assembled from the script
 let u = buildPresetUpdate([PRESETS.outbound_sales]);
-assert.deepEqual(u.enabled_tools, ["check_availability", "book_appointment"]);
+assert.deepEqual(u.enabled_tools, ["check_availability", "book_appointment", "opt_out_customer"]);
 assert.equal(u.scraping_enabled, true);
 assert.equal((u.vapi_assistant as any).model.messages[0].content, u.system_prompt);
 console.log("buildPresetUpdate single: ok");
 
-// MULTIPLE presets → union the tools, OR the scraping, layer the scripts into one agent
+// MULTIPLE presets → union the tools (+ auto opt-out), OR the scraping, layer the scripts into one agent
 u = buildPresetUpdate([PRESETS.inbound_receptionist, PRESETS.outbound_sales]);
 const tools = u.enabled_tools as string[];
 assert.ok(tools.includes("check_availability") && tools.includes("book_appointment") && tools.includes("capture_fields"));
-assert.equal(tools.length, 3); // unioned, no duplicate check_availability/book_appointment
+assert.ok(tools.includes("opt_out_customer"));        // every calling agent gets opt-out (TCPA)
+assert.equal(tools.length, 4); // 3 unioned endings + opt_out_customer
 assert.equal(u.scraping_enabled, true); // sales turns sources on
 assert.ok((u.system_prompt as string).includes("AI Receptionist"));
 assert.ok((u.system_prompt as string).includes("Outbound Sales")); // both roles layered in

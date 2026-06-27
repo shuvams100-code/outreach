@@ -16,13 +16,11 @@
 ## The "ending tools" that unlock everything else (build once, reuse across many services)
 | Ending tool | Unlocks |
 |---|---|
-| `capture_fields` (save structured answers) — ✅ **BUILT** | qualification, surveys, research, screening, intake |
-| `take_message` | receptionist, after-hours |
-| `transfer_to_human` (warm transfer) | receptionist, support, high-intent sales |
-| `answer_from_kb` (knowledge base) | FAQ deflection, Tier-1 support |
-| `send_link` (SMS/email a link) | review generation, payment, info send |
-| `log_ticket` | complaint intake, helpdesk |
-| web-form capture + instant-call | speed-to-lead |
+| `capture_fields` (save structured answers) — ✅ **BUILT** | qualification, surveys, research, screening, **take-message, callback, complaint/ticket** (all = a capture with a `type`) |
+| Answer from knowledge base — ✅ **BUILT** (prompt injection, not a tool) | FAQ deflection, Tier-1 support |
+| web-form capture — ✅ **BUILT** | inbound lead capture (instant-call-on-submit is a deploy-time add) |
+| `transfer_to_human` (warm transfer) — ⏸️ **dropped by decision** | live support / high-intent routing |
+| `send_link` (SMS/email a link) — ❌ **the one unbuilt ending** (needs SMS) | review generation, payment links |
 
 Rework key: **Ready** = sellable now · **Small** (~10%) = one ending tool · **Medium** (~30%) = ending + a new channel/integration · **Large** (~50%+) = deep integration / regulated.
 
@@ -50,12 +48,12 @@ Rework key: **Ready** = sellable now · **Small** (~10%) = one ending tool · **
 | Service (industry name) | What the client gets | Rework |
 |---|---|---|
 | **Inbound Appointment Booking** | Answers the line and books callers onto the calendar | **Ready** (inbound + booking live) |
-| **Inbound Lead Capture / Inbound Sales** | Answers inbound inquiries, qualifies, books or routes | **Small** — `capture_fields` |
-| **AI Receptionist** | Answers, gives info, takes messages, routes calls | **Medium** — `take_message` + `transfer_to_human` |
-| **After-Hours / Overflow Answering** | Catches calls staff miss; books or messages | **Medium** — same endings as receptionist |
-| **Tier-1 Support / FAQ Deflection** | Answers common questions from the client's knowledge base | **Medium** — `answer_from_kb` (knowledge_base field exists) |
-| **Complaint / Ticket Intake** | Logs complaints/tickets with details for follow-up | **Medium** — `log_ticket` |
-| **Call Screening & Routing** | Screens callers, forwards the right ones to a human | **Small–Medium** — `transfer_to_human` |
+| **Inbound Lead Capture / Inbound Sales** | Answers inbound inquiries, qualifies, books or routes | **✅ Ready** — `capture_fields` + booking |
+| **AI Receptionist** | Answers, gives info, books, takes messages | **✅ Ready** — booking + `capture_fields` (message) + knowledge-base answers all built |
+| **After-Hours / Overflow Answering** | Catches calls staff miss; books or messages | **✅ Ready** — same as receptionist |
+| **Tier-1 Support / FAQ Deflection** | Answers common questions from the client's knowledge base | **✅ Ready** — knowledge base injected into the agent's prompt |
+| **Complaint / Ticket Intake** | Logs complaints/tickets with details for follow-up | **✅ Ready** — `capture_fields` with `type: complaint` |
+| **Call Screening & Routing** | Screens callers, forwards the right ones to a human | **Dropped** — needs `transfer_to_human` (out of scope) |
 | **Order Taking / Status** | Takes simple orders or gives order status | **Large** — order capture + system integration |
 
 ## C. Data-only services (the lead-gen base, no calling required)

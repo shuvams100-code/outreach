@@ -1,18 +1,28 @@
 import { supabase } from "./lib/supabase";
-import { getAvailableSlots, bookSlot } from "./booking";
-import { notifyBookingCreated } from "./notify";
+import { getAvailableSlots, bookSlot, cancelBooking } from "./booking";
+import { notifyBookingCreated, notifyCalendarDisconnected } from "./notify";
+import { normalizePhone } from "./upload";
+import { timezoneFromPhone } from "./enrich";
 
-// The two tools VAPI calls mid-conversation so the agent can book against the real calendar.
+// The tools VAPI calls mid-conversation so the agent can act against the real system.
 // HTTP lives in server.ts; the logic here is plain and unit-testable.
 
 export type ToolCall = { id: string; name: string; args: Record<string, any> };
-export type CallContext = { accountId: string; leadId: string | null; vapiCallId: string | null };
+export type CallContext = {
+  accountId: string;
+  leadId: string | null;
+  vapiCallId: string | null;
+  callerPhone: string | null;          // inbound: the caller's number (no lead_id in metadata)
+  rescheduleBookingId: string | null;  // reminder-call reschedule: the original booking to cancel
+};
 export type ParsedCall = {
   calls: ToolCall[];
   accountIdHint: string | null;  // outbound: we stamp account_id into call.metadata
   leadId: string | null;
   vapiCallId: string | null;
   phoneNumberId: string | null;  // inbound: the dialed VAPI number → maps to its owning account
+  callerPhone: string | null;
+  rescheduleBookingId: string | null;
 };
 
 // ---- pure: parse VAPI's webhook + build its expected reply (no network, unit-tested) ----
@@ -35,6 +45,8 @@ export function parseToolCalls(body: any): ParsedCall {
     leadId: meta.lead_id ?? null,
     vapiCallId: msg.call?.id ?? null,
     phoneNumberId: msg.call?.phoneNumberId ?? msg.phoneNumber?.id ?? msg.call?.phoneNumber?.id ?? null,
+    callerPhone: msg.call?.customer?.number ?? msg.customer?.number ?? null,
+    rescheduleBookingId: meta.booking_id ?? null,
   };
 }
 
@@ -65,6 +77,24 @@ export function toolResponse(results: { toolCallId: string; result: string }[]) 
 
 // ---- handlers (touch calendar + DB) ----
 
+// Resolve the lead this call is about. Outbound calls carry lead_id in metadata. Inbound calls don't —
+// so find the caller by phone, or create a fresh `inbound` lead. Without this, inbound bookings save with
+// a null lead and a returning caller stays stranded in `calling`/`no_answer`.
+async function ensureLead(accountId: string, ctx: CallContext, name?: string | null): Promise<string | null> {
+  if (ctx.leadId) return ctx.leadId;
+  const raw = ctx.callerPhone;
+  if (!raw) return null;
+  const phone = normalizePhone(raw) ?? raw;
+  const { data: existing } = await supabase
+    .from("leads").select("id").eq("account_id", accountId).eq("phone", phone).maybeSingle();
+  if (existing?.id) return existing.id as string;
+  const { data: created } = await supabase
+    .from("leads")
+    .insert({ account_id: accountId, phone, first_name: name ?? null, source: "inbound", state: "scrubbed", timezone: timezoneFromPhone(phone) })
+    .select("id").single();
+  return created?.id ?? null;
+}
+
 export async function handleCheckAvailability(accountId: string): Promise<string> {
   const slots = await getAvailableSlots(accountId, new Date(), 4);
   if (!slots.length) return "No open slots in the next two weeks. Offer to follow up by email instead.";
@@ -87,14 +117,17 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
     return `That time is no longer open. Offer one of these instead: ${alt || "(none available)"}`;
   }
 
-  const who = { name: args.name ?? null, company: args.company ?? null, phone: args.phone ?? null };
+  const who = { name: args.name ?? null, company: args.company ?? null, phone: args.phone ?? null, notes: args.notes ?? null, email: args.email ?? null };
   const r = await bookSlot(ctx.accountId, slot.startIso, who);
+
+  // Attach to a lead — resolving/creating one for inbound callers who have no lead_id in metadata.
+  const leadId = await ensureLead(ctx.accountId, ctx, args.name);
 
   // Record so the rest of the system sees it (capacity throttle, reminders, dashboards).
   // ponytail: call_id stays null — the live call's `calls` row doesn't exist until the call ends.
   const { error } = await supabase.from("bookings").insert({
     account_id: ctx.accountId,
-    lead_id: ctx.leadId,
+    lead_id: leadId,
     meeting_at: slot.startIso,
     meeting_type: "google_meet",
     meeting_link: r.meetingLink,
@@ -102,9 +135,16 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
     status: "open",
   });
   if (error) return `Calendar booked (${r.label}) but saving it failed: ${error.message}. Tell the prospect it's set; flag for support.`;
-  if (ctx.leadId) await supabase.from("leads").update({ state: "booked" }).eq("id", ctx.leadId);
+  if (leadId) await supabase.from("leads").update({ state: "booked" }).eq("id", leadId);
 
-  // Fire the booking alert (Slack + client email). Never let a notification failure break the booking.
+  // Reschedule: if this booking came from a reminder call, kill the original so it doesn't ghost the
+  // calendar or keep eating the client's capacity.
+  if (ctx.rescheduleBookingId) {
+    try { await cancelBooking(ctx.accountId, ctx.rescheduleBookingId); }
+    catch (e: any) { console.error("[tools] cancel old booking failed:", e?.message ?? e); }
+  }
+
+  // Fire the booking alert (Slack). Never let a notification failure break the booking.
   const prospect = who.name || who.company || who.phone || "prospect";
   try { await notifyBookingCreated(ctx.accountId, prospect, r.label, r.meetingLink); }
   catch (e: any) { console.error("[tools] booking notification failed:", e?.message ?? e); }
@@ -112,13 +152,42 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
   return `Booked for ${r.label}. Confirm the day and time with the prospect and let them know the invite + link is on the way.`;
 }
 
+// Add the caller to the do-not-call list mid-call (TCPA compliance). Without this, a "stop calling me"
+// is forgotten and the number gets re-dialed if it's ever uploaded again.
+export async function handleOptOut(args: any, ctx: CallContext): Promise<string> {
+  let raw: string | null = args?.phone ?? ctx.callerPhone ?? null;
+  if (!raw && ctx.leadId) {
+    const { data: lead } = await supabase.from("leads").select("phone").eq("id", ctx.leadId).maybeSingle();
+    raw = (lead?.phone as string | null) ?? null;
+  }
+  if (!raw) return "Couldn't capture a number to opt out — apologise and assure them they won't be contacted again.";
+  const phone = normalizePhone(raw) ?? raw;
+
+  const { data: already } = await supabase
+    .from("opt_outs").select("id").eq("account_id", ctx.accountId).eq("phone", phone).maybeSingle();
+  if (!already) {
+    await supabase.from("opt_outs").insert({ account_id: ctx.accountId, phone, reason: args?.reason ?? "requested on call" });
+  }
+  if (ctx.leadId) await supabase.from("leads").update({ state: "disqualified" }).eq("id", ctx.leadId);
+  return "Done — they're removed and won't be contacted again. Apologise for the bother and close warmly.";
+}
+
 // ---- ending tool: capture_fields (qualification / surveys / screening / research) ----
 
 // Pure (unit-tested): normalize whatever the agent passes into a clean payload to store.
 export function normalizeCapture(args: any): { fields: Record<string, unknown>; qualified: boolean | null; notes: string | null } {
-  const fields = args && typeof args.fields === "object" && args.fields !== null ? (args.fields as Record<string, unknown>) : {};
-  const qualified = typeof args?.qualified === "boolean" ? args.qualified : null;
-  const notes = typeof args?.notes === "string" && args.notes.trim() ? args.notes.trim() : null;
+  const a = args && typeof args === "object" ? args : {};
+  const qualified = typeof a.qualified === "boolean" ? a.qualified : null;
+  const notes = typeof a.notes === "string" && a.notes.trim() ? a.notes.trim() : null;
+  let fields: Record<string, unknown>;
+  if (a.fields && typeof a.fields === "object") {
+    fields = a.fields as Record<string, unknown>;
+  } else {
+    // Some models flatten the args ({"budget":"50k"}) instead of nesting under `fields`. Salvage them:
+    // treat every root-level key except the reserved ones as a captured field.
+    const { fields: _f, qualified: _q, notes: _n, ...rest } = a;
+    fields = rest;
+  }
   return { fields, qualified, notes };
 }
 
@@ -127,7 +196,9 @@ export function normalizeCapture(args: any): { fields: Record<string, unknown>; 
 // qualification, surveys, screening, and research without per-use-case code.
 export async function handleCaptureFields(args: any, ctx: CallContext): Promise<string> {
   const { fields, qualified, notes } = normalizeCapture(args);
-  if (!ctx.leadId) return "Noted — but there's no lead record on this call to attach the answers to. Keep going.";
+  // Resolve/create the lead (inbound callers have no lead_id) so the capture is never orphaned.
+  const leadId = await ensureLead(ctx.accountId, ctx, (args?.name as string) ?? null);
+  if (!leadId) return "Noted — but there's no lead record to attach the answers to. Keep going.";
 
   const payload = {
     ...fields,
@@ -138,7 +209,7 @@ export async function handleCaptureFields(args: any, ctx: CallContext): Promise<
   const { error } = await supabase
     .from("leads")
     .update({ captured_data: payload })
-    .eq("id", ctx.leadId)
+    .eq("id", leadId)
     .eq("account_id", ctx.accountId);
   if (error) return `Couldn't save the answers (${error.message}). Continue the conversation; it can be retried.`;
 
@@ -172,6 +243,7 @@ export function toolDefs(url: string): Record<string, any> {
             name: { type: "string", description: "Prospect's name" },
             company: { type: "string", description: "Prospect's company" },
             phone: { type: "string", description: "Prospect's phone number" },
+            email: { type: "string", description: "Prospect's email address — used to send them a calendar invite" },
             notes: { type: "string", description: "Anything useful for the meeting" },
           },
           required: ["start"],
@@ -196,6 +268,22 @@ export function toolDefs(url: string): Record<string, any> {
       },
       server: { url },
     },
+    opt_out_customer: {
+      type: "function",
+      function: {
+        name: "opt_out_customer",
+        description: "Add this person to the do-not-call list. Call this IMMEDIATELY if they ask to be removed, to stop calling, or to never be contacted again.",
+        parameters: {
+          type: "object",
+          properties: {
+            phone: { type: "string", description: "Their phone number if you have it" },
+            reason: { type: "string", description: "What they said, briefly" },
+          },
+          required: [],
+        },
+      },
+      server: { url },
+    },
   };
 }
 
@@ -204,7 +292,13 @@ export function toolDefs(url: string): Record<string, any> {
 export async function handleToolCalls(body: any): Promise<{ results: { toolCallId: string; result: string }[] }> {
   const p = parseToolCalls(body);
   const accountId = await resolveAccountId(p);
-  const ctx: CallContext = { accountId: accountId ?? "", leadId: p.leadId, vapiCallId: p.vapiCallId };
+  const ctx: CallContext = {
+    accountId: accountId ?? "",
+    leadId: p.leadId,
+    vapiCallId: p.vapiCallId,
+    callerPhone: p.callerPhone,
+    rescheduleBookingId: p.rescheduleBookingId,
+  };
   const results = [];
   for (const c of p.calls) {
     let result: string;
@@ -213,9 +307,17 @@ export async function handleToolCalls(body: any): Promise<{ results: { toolCallI
       else if (c.name === "check_availability") result = await handleCheckAvailability(accountId);
       else if (c.name === "book_appointment") result = await handleBookAppointment(c.args, ctx);
       else if (c.name === "capture_fields") result = await handleCaptureFields(c.args, ctx);
+      else if (c.name === "opt_out_customer") result = await handleOptOut(c.args, ctx);
       else result = `Unknown tool: ${c.name}`;
     } catch (e: any) {
-      result = `Tool error: ${e?.message ?? e}`;
+      const msg = e?.message ?? String(e);
+      if (/401|unauthorized|invalid_grant|token.*expired/i.test(msg) && accountId) {
+        // Calendar OAuth expired — alert the client asynchronously, don't crash the call.
+        notifyCalendarDisconnected(accountId).catch(() => {});
+        result = "I wasn't able to access the calendar right now. I've flagged this for the team and someone will follow up to confirm your appointment.";
+      } else {
+        result = `Tool error: ${msg}`;
+      }
     }
     results.push({ toolCallId: c.id, result });
   }

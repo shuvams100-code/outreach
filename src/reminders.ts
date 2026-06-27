@@ -57,13 +57,14 @@ export async function runReminderSweep(now: Date = new Date()): Promise<{ placed
   for (const b of due) {
     // No lead = no prospect number to call (e.g. an inbound booking with no captured lead). Skip.
     if (!b.lead_id) { skipped++; continue; }
-    const { data: lead } = await supabase.from("leads").select("phone, first_name").eq("id", b.lead_id).single();
+    const { data: lead } = await supabase.from("leads").select("phone, first_name, timezone").eq("id", b.lead_id).single();
     if (!lead?.phone) { skipped++; continue; }
     const { data: acct } = await supabase
       .from("accounts").select("vapi_phone_numbers, vapi_assistant, booking").eq("id", b.account_id).single();
     if (!acct?.vapi_assistant) { skipped++; continue; }
 
-    const tz = (acct.booking as any)?.timezone ?? "America/New_York";
+    // Use the prospect's local timezone so they hear the correct local time (not the client's).
+    const tz = (lead as any).timezone ?? (acct.booking as any)?.timezone ?? "America/New_York";
     const whenLabel = labelMeeting(b.meeting_at!, tz);
     try {
       await placeCall(
