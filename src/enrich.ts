@@ -1,4 +1,5 @@
 import { supabase } from "./lib/supabase";
+import { logCost } from "./costs";
 
 // --- area code → IANA timezone (US only; free static lookup) ---
 const ET = "America/New_York";
@@ -260,7 +261,7 @@ export type EnrichUpdate = {
 // Returns the update to apply, or null when NO rung produced data — caller leaves the
 // lead `new` so a re-run retries it (never fake-mark it `enriched` on empty results).
 // `icpDescription` (per-account) decides what counts as a fitting lead — no industry hardcoded.
-export async function enrichLead(lead: Lead, icpDescription?: string | null): Promise<EnrichUpdate | null> {
+export async function enrichLead(lead: Lead, icpDescription?: string | null, accountId?: string): Promise<EnrichUpdate | null> {
   // Physical address state is more reliable than area code for mobile numbers (1.2).
   const timezone = timezoneFromState(lead.address_state) ?? timezoneFromPhone(lead.phone);
   const website = (lead.raw_data?.website as string | null | undefined) ?? null;
@@ -272,7 +273,12 @@ export async function enrichLead(lead: Lead, icpDescription?: string | null): Pr
     if (text) {
       const email = extractEmail(text);
       const llm = await callLLM(text, lead.business_name ?? "", icpDescription);
-      if (llm) profile = { ...llm, email: email ?? llm.email };
+      if (llm) {
+        profile = { ...llm, email: email ?? llm.email };
+        if (accountId) {
+          await logCost(accountId, "openrouter", 0.003, `LLM profile check for ${lead.business_name} (website)`);
+        }
+      }
     }
   }
 
@@ -284,8 +290,16 @@ export async function enrichLead(lead: Lead, icpDescription?: string | null): Pr
       lead.address_state ?? "",
     );
     if (tavilyText) {
+      if (accountId) {
+        await logCost(accountId, "tavily", 0.01, `Tavily search for ${lead.business_name}`);
+      }
       const llm = await callLLM(tavilyText, lead.business_name ?? "", icpDescription);
-      if (llm) profile = profile ? { ...profile, ...llm } : llm;
+      if (llm) {
+        profile = profile ? { ...profile, ...llm } : llm;
+        if (accountId) {
+          await logCost(accountId, "openrouter", 0.003, `LLM profile check for ${lead.business_name} (Tavily fallback)`);
+        }
+      }
     }
   }
 
@@ -327,7 +341,7 @@ export async function enrichAccount(accountId: string): Promise<{
     i++;
     const name = (lead as Lead).business_name ?? "(no name)";
     try {
-      const update = await enrichLead(lead as Lead, icp);
+      const update = await enrichLead(lead as Lead, icp, accountId);
       if (!update) {
         failed++;
         console.log(`[${i}/${total}] ${name} → failed (no data; left as new)`);

@@ -1,5 +1,6 @@
 import { supabase } from "./lib/supabase";
 import { classifyCall, type RetryRules, type VapiResult } from "./outcome";
+import { logCost } from "./costs";
 
 // Handles VAPI's end-of-call webhook (POST /api/webhook/vapi).
 // callContact places the call and exits immediately; this function runs when VAPI fires the result.
@@ -69,6 +70,7 @@ export async function processVapiCallEnd(body: any): Promise<void> {
 
   // 4.4 Deduct call cost from account balance (prevent dialing past zero balance).
   if (typeof call.cost === "number" && call.cost > 0) {
+    await logCost(accountId, "vapi", call.cost, `Vapi call ${callId}`);
     await supabase.rpc("decrement_balance", { account_id: accountId, amount: call.cost });
   }
 }

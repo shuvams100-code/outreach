@@ -2,6 +2,7 @@ import { supabase } from "./lib/supabase";
 import { normalizePhone } from "./upload";
 import { timezoneFromPhone } from "./enrich";
 import { deriveSearchTerm } from "./icp";
+import { logCost } from "./costs";
 
 // Multi-source lead scraping. Each source is one Apify actor + a small adapter (how to call it).
 // The engine runs whatever the account has toggled on in `sources` and dedupes across all of them
@@ -176,6 +177,10 @@ export async function scrapeAccount(accountId: string, maxItems?: number) {
       const { rows, noPhone, dup, ads } = selectNewLeads(items, accountId, seenPhones, seenDomains, key, adapter.isAd);
       allRows.push(...rows);
       perSource[key] = { scraped: items.length, inserted: rows.length, dup, noPhone, ads };
+      const apifyCost = items.length * 0.005;
+      if (apifyCost > 0) {
+        await logCost(accountId, "apify", apifyCost, `Apify scrape for source "${key}" returned ${items.length} items`);
+      }
     } catch (e: any) {
       perSource[key] = { error: e?.message ?? String(e) };
     }
