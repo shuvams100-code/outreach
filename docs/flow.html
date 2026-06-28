@@ -426,19 +426,24 @@
       classDef dec fill:#fef3c7,stroke:#d97706,color:#78350f;
       classDef good fill:#d1fae5,stroke:#059669,color:#064e3b;
       classDef warn fill:#ffedd5,stroke:#f97316,color:#7c2d12;
-      Start(["New client"]):::se --> Dir{"Service?"}:::dec
-      Dir -- "Outbound" --> OB["We call their contacts"]:::act
-      Dir -- "Inbound" --> IB["We answer their line"]:::act
-      Dir -- "Both" --> OB
-      OB --> Who{"Customer type?"}:::dec
+      Start(["New client"]):::se --> Svc{"Pick 1 of 7<br/>main services"}:::dec
+      Svc --> Sub{"Pick sub-service"}:::dec
+      Sub --> Preset["Maps to a preset<br/>(tools · scraping · success metric)"]:::act
+      Preset --> Dir{"Direction?"}:::dec
+      Dir -- "Outbound" --> Who{"Customer type?"}:::dec
+      Dir -- "Inbound" --> Script
       Who -- "B2B" --> B2B["Upload + Scraping"]:::good
       Who -- "B2C" --> B2C["Upload only (consented)"]:::warn
-      IB --> Cfg["Configure script + voice<br/>+ calendar + capacity"]:::act
-      B2B --> Cfg
-      B2C --> Cfg
-      Cfg --> Go(["Flip Active — engine runs"]):::se
+      B2B --> Script
+      B2C --> Script
+      Script{"Calling script?"}:::dec
+      Script -- "Use preset default<br/>(quick onboarding)" --> Cfg
+      Script -- "Write/paste client's<br/>own script" --> Custom["Custom script → fed to<br/>VAPI verbatim (override)"]:::good
+      Custom --> Cfg
+      Cfg["+ voice + calendar + capacity"]:::act --> Go(["Flip Active — engine runs"]):::se
     </div></div>
-    <p class="note">Onboarding = fill one DB row, flip <code>active</code>. Direction + customer type determine which pipes activate.</p>
+    <p class="note">Onboarding = fill one DB row, flip <code>active</code>. Service → sub-service picks the <b>preset</b> (the plumbing: tools, scraping, success metric).
+      The <b>script</b> is separate: take the preset's default, or supply the client's <b>own script</b> — that override is sent to VAPI word-for-word so the agent follows it precisely.</p>
   </div>
 </main>
 <footer>Reacher AI — inbound + outbound AI calling, end to end.</footer>

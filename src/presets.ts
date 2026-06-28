@@ -10,12 +10,13 @@ export type Preset = {
   key: string;
   label: string;
   description: string;
-  category: "outbound" | "inbound" | "data" | "custom";
+  category: "outbound" | "inbound" | "data" | "followup" | "custom";
   enabled_tools: string[];
   sources_enabled: boolean; // turn on the lead-gen scrapers
   system_prompt: string;    // "" for data-only / custom (no calling agent to script)
   first_message: string;
   success_definition: string;
+  script_variant?: string;  // variant of the script for same tool set (e.g., "appointment_setting", "db_reactivation")
 };
 
 const DEFAULT_MODEL = { provider: "openai", model: "gpt-4o-mini" };
@@ -97,17 +98,165 @@ export const PRESETS: Record<string, Preset> = {
     first_message: "",
     success_definition: "",
   },
+  ai_reminders: {
+    key: "ai_reminders",
+    label: "Appointment Reminders",
+    description: "Calls upcoming appointments to confirm, recover no-shows, or remind event registrants.",
+    category: "followup",
+    enabled_tools: ["check_availability", "book_appointment", "capture_fields", "opt_out_customer"],
+    sources_enabled: false,
+    system_prompt:
+      "You are calling to remind someone about an upcoming appointment for the business described in your context. Be friendly and clear. Confirm the date, time, and location. Ask if they can make it. If they need to reschedule, call check_availability and then book_appointment with the new time. If they can't make it, capture the reason with capture_fields. Always end with a clear next step.",
+    first_message: "Hi, this is a reminder from the team about your upcoming appointment — can you confirm you'll be there?",
+    success_definition: "Appointment confirmed, rescheduled, or cancellation reason captured.",
+    script_variant: "confirmation",
+  },
+  list_clean: {
+    key: "list_clean",
+    label: "List Cleaning & Validation",
+    description: "Validate phones, dedupe, scrub against opt-outs, add timezone tags — no calling.",
+    category: "data",
+    enabled_tools: [],
+    sources_enabled: true, // uses opt-out check
+    system_prompt: "",
+    first_message: "",
+    success_definition: "Clean, validated, tagged lead list ready for use.",
+  },
+  lead_enrich: {
+    key: "lead_enrich",
+    label: "Lead Enrichment",
+    description: "Research each lead — website, email, profile, ICP fit — no calling.",
+    category: "data",
+    enabled_tools: [],
+    sources_enabled: true, // enrichment scraping only
+    system_prompt: "",
+    first_message: "",
+    success_definition: "Enriched lead list with website, email, profile, and ICP fit.",
+  },
 };
 
 const uniq = (xs: string[]) => [...new Set(xs)];
 
+// Script variants: same tool set + endings, different agent script for a different use case.
+// These are NOT separate presets — they're prompt variations selected at apply time.
+// `label` is the short dropdown line; `prompt` is the actual system_prompt sent to the model.
+// Omit `prompt` (the "default" variant) to fall back to the preset's own system_prompt.
+// Data-only presets (no calling agent) list variants for labelling only — their prompt is never used.
+export type ScriptVariant = { label: string; prompt?: string };
+
+export const SCRIPT_VARIANTS: Record<string, Record<string, ScriptVariant>> = {
+  outbound_sales: {
+    default: { label: "Cold-call → book demo" },
+    appointment_setting: {
+      label: "Lighter pitch → just fill calendar",
+      prompt:
+        "You are a friendly outbound rep for the business described in your context. Your only goal is to get a meeting on the calendar — keep the pitch light, don't oversell. Confirm you're speaking to the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in.",
+    },
+    db_reactivation: {
+      label: "Re-engage old leads → book",
+      prompt:
+        "You are calling past or dormant leads on behalf of the business described in your context — people who showed interest before but went quiet. Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar. Be gracious if they've moved on.",
+    },
+    renewals_winback: {
+      label: "Expiring contracts → save/renew",
+      prompt:
+        "You are calling customers of the business described in your context whose contract or subscription is expiring or recently lapsed. Your goal is to save the account — confirm their status, surface the value they'd lose, and handle hesitation calmly. If they want to continue, call check_availability and book_appointment to set up the renewal conversation. Never pressure; make staying easy.",
+    },
+  },
+  lead_qualification: {
+    default: { label: "Qualify & score" },
+    survey_research: {
+      label: "Survey script → capture answers",
+      prompt:
+        "You are running a short survey on behalf of the business described in your context. Read the questions naturally, one at a time, without leading the respondent. Record each answer with capture_fields exactly as given. Stay neutral — you're gathering research, not selling. Thank them for their time at the end.",
+    },
+    recruitment_screening: {
+      label: "Screen candidates → book interview",
+      prompt:
+        "You are screening job candidates for the business described in your context. Ask the screening questions one at a time and capture the answers with capture_fields, marking whether the candidate meets the basic criteria (qualified true or false). If they're a fit and interested, call check_availability and book_appointment to schedule an interview. Be respectful and encouraging.",
+    },
+  },
+  ai_reminders: {
+    confirmation: { label: "Confirm upcoming appointments" }, // = preset default prompt
+    no_show_recovery: {
+      label: "Call missed → rebook",
+      prompt:
+        "You are calling someone who missed a recent appointment with the business described in your context. Be warm and non-judgmental — things come up. Confirm you've reached the right person, let them know they were missed, and offer to find a new time. Call check_availability and book_appointment to rebook. If they no longer want to come, capture the reason with capture_fields.",
+    },
+    event_reminder: {
+      label: "Call registrants → confirm attendance",
+      prompt:
+        "You are calling people registered for an upcoming event run by the business described in your context. Remind them of the event date, time, and location, and confirm whether they still plan to attend. Record their answer with capture_fields. If they can't make it, thank them and note it. Keep it brief and upbeat.",
+    },
+  },
+  inbound_receptionist: {
+    default: { label: "Receptionist (business hours)" },
+  },
+  lead_gen: {
+    default: { label: "Scrape + enrich" },
+    icp_prospecting: { label: "ICP → search terms → scrape" }, // data-only: label only
+  },
+  complaint_intake: {
+    default: { label: "Log complaint with order ID" },
+  },
+  list_clean: {
+    default: { label: "Validate + dedupe + opt-out scrub + timezone tag" },
+  },
+  lead_enrich: {
+    default: { label: "Enrich with website, email, profile, ICP fit" },
+  },
+};
+
+// Resolve a preset + chosen variant into the actual system_prompt to use.
+// No variant → the preset's own prompt. Variant with `prompt` → that prompt. Variant without
+// `prompt` (a "default"-style entry) → fall back to the preset's prompt. Unknown variant → throw.
+function resolveVariantPrompt(preset: Preset, variant?: string): string {
+  if (!variant) return preset.system_prompt;
+  const registry = SCRIPT_VARIANTS[preset.key];
+  const v = registry?.[variant];
+  if (!v) {
+    const known = Object.keys(registry ?? {}).join(", ") || "(none)";
+    throw new Error(`Unknown script_variant "${variant}" for preset "${preset.key}". One of: ${known}`);
+  }
+  return v.prompt ?? preset.system_prompt;
+}
+
+// A client's own hand-written script. When provided, it OVERRIDES the preset/variant text and is
+// fed to VAPI verbatim — the agent follows the client's exact words. The preset still decides the
+// plumbing (tools, scraping, success metric); only the spoken script is replaced.
+export type ScriptOverride = {
+  system_prompt: string;          // the exact script — sent to VAPI as-is
+  first_message?: string;         // optional opening line; falls back to the preset's
+  success_definition?: string;    // optional; falls back to the preset's
+};
+
+export type BuildOptions = {
+  voiceId?: string;
+  override?: ScriptOverride;      // client's custom script (takes precedence over preset script)
+};
+
 // Pure (unit-tested): compose one OR MANY presets into the account fields to write. Unions the endings,
 // ORs the scraping, and layers the scripts (so a Receptionist + Sales account becomes one agent that
 // covers both). Presets with no script (data-only / custom) don't overwrite the agent — left manual.
-export function buildPresetUpdate(presets: Preset[], voiceId?: string) {
-  const enabled_tools = uniq(presets.flatMap((p) => p.enabled_tools));
-  const sources_enabled = presets.some((p) => p.sources_enabled);
-  const scripted = presets.filter((p) => p.system_prompt.trim());
+// presets can be Preset objects (with script_variant) or just preset keys as strings.
+// A ScriptOverride (the client's own script) replaces the composed script and is fed to VAPI verbatim.
+// Back-compat: a bare voiceId string is still accepted as the second arg.
+export function buildPresetUpdate(
+  presets: (Preset | { key: string; script_variant?: string })[],
+  opts?: string | BuildOptions,
+) {
+  const { voiceId, override } = typeof opts === "string" ? { voiceId: opts, override: undefined } : (opts ?? {});
+  // Normalize to Preset objects, resolving each chosen variant into the actual system_prompt.
+  const normalized = presets.map((p) => {
+    const preset = "system_prompt" in p ? p : PRESETS[p.key];
+    if (!preset) throw new Error(`Unknown preset "${p.key}"`);
+    const script_variant = p.script_variant ?? preset.script_variant;
+    return { ...preset, script_variant, system_prompt: resolveVariantPrompt(preset, script_variant) };
+  });
+
+  const enabled_tools = uniq(normalized.flatMap((p) => p.enabled_tools));
+  const sources_enabled = normalized.some((p) => p.sources_enabled);
+  const scripted = normalized.filter((p) => p.system_prompt.trim());
 
   // Every calling agent must be able to honor a do-not-call request (TCPA) — always include opt-out.
   if (scripted.length && !enabled_tools.includes("opt_out_customer")) enabled_tools.push("opt_out_customer");
@@ -126,11 +275,19 @@ export function buildPresetUpdate(presets: Preset[], voiceId?: string) {
   } else if (scripted.length > 1) {
     base.system_prompt =
       "You are an AI voice agent for the business described in your context. You cover several roles — read the situation (an outbound call vs an inbound one, and what the caller wants) and use the right one:\n\n" +
-      scripted.map((p) => `■ ${p.label}: ${p.system_prompt}`).join("\n\n");
+      scripted.map((p) => `■ ${p.label}${p.script_variant ? ` (${p.script_variant})` : ""}: ${p.system_prompt}`).join("\n\n");
     base.first_message = scripted[0].first_message;
     base.success_definition = scripted.map((p) => p.success_definition).join("  ·  ");
   }
   // scripted.length === 0 → data-only / custom: don't set a script (leave the agent manual).
+
+  // Client's own script wins: replace the composed script and feed it to VAPI verbatim.
+  // first_message / success_definition fall back to whatever the preset(s) composed.
+  if (override?.system_prompt?.trim()) {
+    base.system_prompt = override.system_prompt;
+    base.first_message = override.first_message ?? base.first_message ?? "";
+    base.success_definition = override.success_definition ?? base.success_definition ?? "";
+  }
 
   if (base.system_prompt) {
     base.vapi_assistant = {
@@ -160,14 +317,21 @@ function deepMerge(base: Record<string, unknown>, override: Record<string, unkno
 
 // Apply one or more presets to an account (composed). Leaves client-specific fields alone.
 // vapi_assistant is deep-merged so custom tools/temperature/etc. the client configured are preserved.
-export async function applyPreset(accountId: string, keys: string | string[], voiceId?: string) {
+// keys can be strings (preset key) or objects { key: string; script_variant?: string }
+// Pass a ScriptOverride to feed the client's own hand-written script to VAPI verbatim.
+export async function applyPreset(
+  accountId: string,
+  keys: string | string[] | Array<string | { key: string; script_variant?: string }>,
+  opts?: string | BuildOptions
+) {
   const keyList = Array.isArray(keys) ? keys : [keys];
   const presets = keyList.map((k) => {
-    const p = PRESETS[k];
-    if (!p) throw new Error(`Unknown preset "${k}". One of: ${Object.keys(PRESETS).join(", ")}`);
-    return p;
+    if (typeof k === "string") return PRESETS[k];
+    const p = PRESETS[k.key];
+    if (!p) throw new Error(`Unknown preset "${k.key}". One of: ${Object.keys(PRESETS).join(", ")}`);
+    return { ...p, script_variant: k.script_variant ?? p.script_variant };
   });
-  const update = buildPresetUpdate(presets, voiceId);
+  const update = buildPresetUpdate(presets, opts);
 
   if (update.vapi_assistant) {
     const { data: existing } = await supabase.from("accounts").select("vapi_assistant").eq("id", accountId).single();

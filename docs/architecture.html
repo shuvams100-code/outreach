@@ -161,8 +161,10 @@
           subgraph ONB ["① ONBOARDING — frontend inputs (cyan = a field your dashboard must collect)"]
             Org(["New organization created"]):::start
             OrgId["Org name · contact · email · client TZ"]:::input
-            Preset{"Pick PRESET(s)<br/>multi-select · stackable"}:::preset
+            Svc{"Pick 1 of 7 services<br/>→ sub-service"}:::preset
+            Preset{"Maps to PRESET(s)<br/>multi-select · stackable"}:::preset
             PApply["PRESET LAYER composes:<br/>Sales · Qualification · Receptionist<br/>· Complaint · Lead-Gen · Custom<br/>→ unions endings · sources · layers script"]:::preset
+            InScript["Calling script · cyan field:<br/>preset/variant default OR<br/>client's own script (override → VAPI verbatim)"]:::input
             InVoice["Voice · dropdown"]:::input
             InPhone["Phone number(s) · caller-ID + inbound"]:::input
             InCal["Calendar + meeting link"]:::input
@@ -272,8 +274,9 @@
           Vault[["VAULT — shared memory · every agent reads &amp; writes"]]:::infra
 
           %% ---- full wiring ----
-          Org --> OrgId --> Preset --> PApply
-          PApply --> InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb
+          Org --> OrgId --> Svc --> Preset --> PApply
+          PApply --> InScript
+          InScript --> InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb
           InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb --> Live
           Live --> Profiler & Porter & Catcher
           InICP -. "drives" .-> Profiler
@@ -414,8 +417,9 @@ document.getElementById("roster").innerHTML = ROSTER.map(([nm,file,crew,role])=>
 
 const INPUTS = [
   ["Organization",false,[["Business name","business_name"],["Contact name","contact_name"],["Contact email","contact_email"],["Contact phone","contact_phone"],["Client timezone","timezone"]]],
-  ["Use-case preset(s) · multi-select",false,[["Sales · Qualification · Receptionist · Complaint · Lead-Gen · Custom","preset"]]],
-  ["Set by the preset",true,[["Which endings the agent gets","enabled_tools"],["Direction (in/out)","—"],["Sources on/off","sources"],["Agent script","system_prompt"],["First message","first_message"],["Success definition","success_definition"]]],
+  ["Service → sub-service → preset(s) · multi-select",false,[["7 services → sub-service maps to: Sales · Qualification · Receptionist · Complaint · Lead-Gen · Custom","preset"],["Script variant (sub-service script)","script_variant"]]],
+  ["Calling script",false,[["Use preset/variant default — OR — write/paste client's own script (override, fed to VAPI verbatim)","system_prompt"]]],
+  ["Set by the preset",true,[["Which endings the agent gets","enabled_tools"],["Direction (in/out)","—"],["Sources on/off","sources"],["Agent script (unless overridden above)","system_prompt"],["First message","first_message"],["Success definition","success_definition"]]],
   ["The agent",false,[["Voice (dropdown)","voice_id"],["Knowledge base — FAQ answers","broker_knowledge_base"],["Qualifying questions","qualifying_questions"]]],
   ["Targeting",false,[["ICP description (2-4 lines)","icp_description"],["Target city","geo_city"],["Target state","geo_state"]]],
   ["Phone numbers",false,[["Outbound + inbound number(s)","vapi_phone_numbers"],["Caller-ID name","caller_id_name"]]],
