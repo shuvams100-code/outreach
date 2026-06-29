@@ -3,14 +3,153 @@
 import { useState, useRef, useEffect } from "react";
 
 // ponytail: mock data — swap for Supabase query later
-const CLIENTS = [
-  { id: "acc_1042", name: "Acme Realty", email: "ops@acmerealty.com" },
-  { id: "acc_1087", name: "BlueSky Insurance", email: "hello@bluesky.io" },
-  { id: "acc_1130", name: "Northwind Logistics", email: "team@northwind.co" },
-  { id: "acc_1156", name: "Sunrise Dental", email: "front@sunrisedental.com" },
-  { id: "acc_1199", name: "Vertex Solar", email: "sales@vertexsolar.com" },
-  { id: "acc_1203", name: "Harbor Financial", email: "contact@harborfin.com" },
+const INITIAL_CLIENTS = [
+  {
+    id: "acc_Harbor",
+    name: "Harbor Financial",
+    email: "contact@harborfin.com",
+    contact: "+1 (555) 120-3456",
+    timezone: "America/New_York",
+    avatar: "HF",
+    color: "#0F172A",
+    leads: "210 Ready Leads",
+    services: ["Do Everything (Full Funnel)"],
+    health: "Operational",
+    retainer: "$5,000.00",
+    payment: "Paid",
+    score: 99,
+    onboarded: "2026-06-28"
+  },
+  {
+    id: "acc_Acme",
+    name: "Acme Realty",
+    email: "ops@acmerealty.com",
+    contact: "+1 (555) 104-2345",
+    timezone: "America/New_York",
+    avatar: "AR",
+    color: "#4F46FF",
+    leads: "24 Ready Leads",
+    services: ["Answer My Phones", "Call Leads & Book", "Fix Lead List"],
+    health: "Operational",
+    retainer: "$1,200.00",
+    payment: "Paid",
+    score: 74,
+    onboarded: "2026-03-10"
+  },
+  {
+    id: "acc_Northwind",
+    name: "Northwind Logistics",
+    email: "team@northwind.co",
+    contact: "+1 (555) 113-0456",
+    timezone: "America/Chicago",
+    avatar: "NL",
+    color: "#10B981",
+    leads: "152 Ready Leads",
+    services: ["Find New Leads", "Fix Lead List"],
+    health: "Operational",
+    retainer: "$2,500.00",
+    payment: "Paid",
+    score: 95,
+    onboarded: "2026-05-28"
+  },
+  {
+    id: "acc_1199",
+    name: "1199 SEIU",
+    email: "info@1199seiu.org",
+    contact: "+1 (555) 119-9234",
+    timezone: "America/New_York",
+    avatar: "SE",
+    color: "#F59E0B",
+    leads: "85 Ready Leads",
+    services: ["Answer My Phones", "Appointment Reminders"],
+    health: "Operational",
+    retainer: "$3,800.00",
+    payment: "Paid",
+    score: 98,
+    onboarded: "2026-06-10"
+  },
+  {
+    id: "acc_Sunrise",
+    name: "Sunrise Dental",
+    email: "front@sunrisedental.com",
+    contact: "+1 (555) 115-6234",
+    timezone: "America/Denver",
+    avatar: "SD",
+    color: "#EF4444",
+    leads: "45 Ready Leads",
+    services: ["Call Leads & Qualify", "Fix Lead List", "Find New Leads"],
+    health: "Operational",
+    retainer: "$1,500.00",
+    payment: "Unpaid",
+    score: 35,
+    onboarded: "2026-06-18"
+  },
+  {
+    id: "acc_Oakwood",
+    name: "Oakwood Estates",
+    email: "management@oakwoodestates.com",
+    contact: "+1 (555) 120-7456",
+    timezone: "America/Los_Angeles",
+    avatar: "OE",
+    color: "#8B5CF6",
+    leads: "42 Ready Leads",
+    services: ["Call Leads & Book", "Find New Leads"],
+    health: "Operational",
+    retainer: "$950.00",
+    payment: "Paid",
+    score: 92,
+    onboarded: "2026-06-25"
+  },
+  {
+    id: "acc_Golden",
+    name: "Golden Years Care",
+    email: "care@goldenyears.com",
+    contact: "+1 (555) 121-1456",
+    timezone: "America/New_York",
+    avatar: "GY",
+    color: "#EC4899",
+    leads: "18 Ready Leads",
+    services: ["Answer My Phones", "Call Leads & Qualify"],
+    health: "Operational",
+    retainer: "$1,800.00",
+    payment: "Paid",
+    score: 88,
+    onboarded: "2026-04-15"
+  },
+  {
+    id: "acc_Apex",
+    name: "Apex Health",
+    email: "contact@apexhealth.com",
+    contact: "+1 (555) 121-5456",
+    timezone: "America/Phoenix",
+    avatar: "AH",
+    color: "#06B6D4",
+    leads: "64 Ready Leads",
+    services: ["Call Leads & Book", "Appointment Reminders", "Find New Leads"],
+    health: "Operational",
+    retainer: "$2,100.00",
+    payment: "Paid",
+    score: 85,
+    onboarded: "2026-05-02"
+  },
+  {
+    id: "acc_1087",
+    name: "BlueSky Insurance",
+    email: "hello@bluesky.io",
+    contact: "+1 (555) 108-7234",
+    timezone: "America/New_York",
+    avatar: "BI",
+    color: "#3B82F6",
+    leads: "12 Ready Leads",
+    services: ["Call Leads & Qualify", "Appointment Reminders"],
+    health: "Operational",
+    retainer: "$1,200.00",
+    payment: "Paid",
+    score: 80,
+    onboarded: "2026-05-10"
+  }
 ];
+
 
 const RECENT = ["Acme Realty", "Northwind Logistics", "acc_1199"];
 
@@ -148,6 +287,18 @@ const generateMockPayments = () => {
 };
 
 export default function Home() {
+  const [clients, setClients] = useState(INITIAL_CLIENTS);
+  
+  // Onboard New Organization Form State
+  const [orgName, setOrgName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [orgEmail, setOrgEmail] = useState("");
+  const [orgPhone, setOrgPhone] = useState("");
+  const [orgTimezone, setOrgTimezone] = useState("America/New_York");
+  const [onboardErrors, setOnboardErrors] = useState({});
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const [onboardSuccessMessage, setOnboardSuccessMessage] = useState("");
+
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [timeframe, setTimeframe] = useState("7d");
@@ -431,9 +582,87 @@ export default function Home() {
     }, 1200);
   };
 
+  const handleOnboardSubmit = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!orgName.trim()) errs.name = "Business name is required.";
+    if (!contactName.trim()) errs.contactName = "Contact name is required.";
+    if (!orgEmail.trim()) {
+      errs.email = "Contact email is required.";
+    } else if (!/\S+@\S+\.\S+/.test(orgEmail)) {
+      errs.email = "Please enter a valid email address.";
+    }
+    if (!orgPhone.trim()) {
+      errs.phone = "Contact phone is required.";
+    } else if (!/^\+?[\d\s-()]{7,20}$/.test(orgPhone.trim())) {
+      errs.phone = "Please enter a valid phone number.";
+    }
+    if (!orgTimezone) errs.timezone = "Please select a timezone.";
+
+    if (Object.keys(errs).length > 0) {
+      setOnboardErrors(errs);
+      return;
+    }
+
+    setOnboardErrors({});
+    setIsOnboarding(true);
+
+    setTimeout(() => {
+      const words = orgName.trim().split(/\s+/);
+      const avatar = words.map(w => w[0]).join("").substring(0, 2).toUpperCase() || "OR";
+      
+      const colors = ["#4F46FF", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#6366F1", "#14B8A6"];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      
+      const newId = "acc_" + orgName.trim().replace(/[^a-zA-Z0-9]/g, "").substring(0, 8);
+      
+      const newClient = {
+        id: newId,
+        name: orgName.trim(),
+        email: orgEmail.trim(),
+        contact: `${contactName.trim()} (${orgPhone.trim()})`,
+        contactName: contactName.trim(),
+        contactPhone: orgPhone.trim(),
+        timezone: orgTimezone,
+        avatar,
+        color: randomColor,
+        leads: "0 Leads (Paused)",
+        services: ["Do Everything (Full Funnel)"],
+        health: "Operational",
+        retainer: "$1,500.00",
+        payment: "Unpaid",
+        score: 100,
+        onboarded: new Date().toISOString().split("T")[0]
+      };
+
+      setClients(prev => [...prev, newClient]);
+      
+      const timestamp = new Date().toLocaleTimeString();
+      setTerminalLogs(prev => [
+        `[${timestamp}] SUCCESS: Onboarded organization "${orgName.trim()}" (Contact: ${contactName.trim()}, TZ: ${orgTimezone})`,
+        ...prev
+      ]);
+
+      setIsOnboarding(false);
+      setOnboardSuccessMessage(`Successfully onboarded ${orgName.trim()}!`);
+      
+      setOrgName("");
+      setContactName("");
+      setOrgEmail("");
+      setOrgPhone("");
+      setOrgTimezone("America/New_York");
+
+      setTimeout(() => {
+        setOnboardSuccessMessage("");
+        setCurrentView("dashboard");
+      }, 1500);
+      
+    }, 1200);
+  };
+
   const q = query.trim().toLowerCase();
   const matches = q
-    ? CLIENTS.filter(
+    ? clients.filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.id.toLowerCase().includes(q) ||
@@ -604,10 +833,10 @@ export default function Home() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "20px" }}>
           <div style={{ flexShrink: 0 }}>
             <div style={{ fontSize: "20px", fontWeight: 600, color: "#1F2433" }}>
-              {currentView === "dashboard" ? "Overview" : currentView === "health" ? "System Health" : currentView === "revenue" ? "Revenue & Payments" : "Client Directory"}
+              {currentView === "dashboard" ? "Overview" : currentView === "health" ? "System Health" : currentView === "revenue" ? "Revenue & Payments" : currentView === "directory" ? "Client Directory" : "Onboard Organization"}
             </div>
             <div style={{ fontSize: "12px", color: "#8A90A0", marginTop: "2px" }}>
-              {currentView === "dashboard" ? "Agency dashboard" : currentView === "health" ? "Real-time operational status" : currentView === "revenue" ? "Billing logs and revenue metrics" : "Full client roster and search"}
+              {currentView === "dashboard" ? "Agency dashboard" : currentView === "health" ? "Real-time operational status" : currentView === "revenue" ? "Billing logs and revenue metrics" : currentView === "directory" ? "Full client roster and search" : "Register a new client organization on the Reacher AI calling platform"}
             </div>
           </div>
 
@@ -702,9 +931,25 @@ export default function Home() {
               </svg>
             </div>
 
-            <button style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-              Add Organization
-            </button>
+            {currentView !== "add-organization" ? (
+              <button 
+                onClick={() => setCurrentView("add-organization")}
+                style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background 150ms ease" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#3F37D9"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "#4F46FF"}
+              >
+                Add Organization
+              </button>
+            ) : (
+              <button 
+                onClick={() => setCurrentView("dashboard")}
+                style={{ background: "#FFFFFF", color: "#4F46FF", border: "1px solid #4F46FF", borderRadius: "10px", padding: "8px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all 150ms ease" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F5FF"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
+              >
+                Back to Dashboard
+              </button>
+            )}
           </div>
         </div>
 
@@ -1231,8 +1476,8 @@ export default function Home() {
                               flexDirection: "column",
                               gap: "2px"
                             }}>
-                              {CLIENTS.filter(c => c.name.toLowerCase().includes(paymentClientSearch.toLowerCase())).length > 0 ? (
-                                CLIENTS.filter(c => c.name.toLowerCase().includes(paymentClientSearch.toLowerCase())).map((c) => (
+                              {clients.filter(c => c.name.toLowerCase().includes(paymentClientSearch.toLowerCase())).length > 0 ? (
+                                clients.filter(c => c.name.toLowerCase().includes(paymentClientSearch.toLowerCase())).map((c) => (
                                   <div
                                     key={c.id}
                                     onClick={(e) => {
@@ -1444,112 +1689,7 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const allClients = [
-                        {
-                          id: "acc_Harbor",
-                          name: "Harbor Financial",
-                          avatar: "HF",
-                          color: "#0F172A",
-                          leads: "210 Ready Leads",
-                          services: ["Do Everything (Full Funnel)"],
-                          health: "Operational",
-                          retainer: "$5,000.00",
-                          payment: "Paid",
-                          score: 99,
-                          onboarded: "2026-06-28"
-                        },
-                        {
-                          id: "acc_Acme",
-                          name: "Acme Realty",
-                          avatar: "AR",
-                          color: "#4F46FF",
-                          leads: "24 Ready Leads",
-                          services: ["Answer My Phones", "Call Leads & Book", "Fix Lead List"],
-                          health: errors.some(e => e.client && e.client.includes("Acme")) ? "Degraded" : "Operational",
-                          retainer: "$1,200.00",
-                          payment: "Paid",
-                          score: 74,
-                          onboarded: "2026-03-10"
-                        },
-                        {
-                          id: "acc_Northwind",
-                          name: "Northwind Logistics",
-                          avatar: "NL",
-                          color: "#10B981",
-                          leads: "152 Ready Leads",
-                          services: ["Find New Leads", "Fix Lead List"],
-                          health: "Operational",
-                          retainer: "$2,500.00",
-                          payment: "Paid",
-                          score: 95,
-                          onboarded: "2026-05-28"
-                        },
-                        {
-                          id: "acc_1199",
-                          name: "1199 SEIU",
-                          avatar: "SE",
-                          color: "#F59E0B",
-                          leads: "85 Ready Leads",
-                          services: ["Answer My Phones", "Appointment Reminders"],
-                          health: "Operational",
-                          retainer: "$3,800.00",
-                          payment: "Paid",
-                          score: 98,
-                          onboarded: "2026-06-10"
-                        },
-                        {
-                          id: "acc_Sunrise",
-                          name: "Sunrise Dental",
-                          avatar: "SD",
-                          color: "#EF4444",
-                          leads: errors.some(e => e.client && e.client.includes("Sunrise")) ? "0 Leads (Paused)" : "45 Ready Leads",
-                          services: ["Call Leads & Qualify", "Fix Lead List", "Find New Leads"],
-                          health: errors.some(e => e.client && e.client.includes("Sunrise")) ? "Paused" : "Operational",
-                          retainer: "$1,500.00",
-                          payment: "Unpaid",
-                          score: 35,
-                          onboarded: "2026-06-18"
-                        },
-                        {
-                          id: "acc_Oakwood",
-                          name: "Oakwood Estates",
-                          avatar: "OE",
-                          color: "#8B5CF6",
-                          leads: "42 Ready Leads",
-                          services: ["Call Leads & Book", "Find New Leads"],
-                          health: "Operational",
-                          retainer: "$950.00",
-                          payment: "Paid",
-                          score: 92,
-                          onboarded: "2026-06-25"
-                        },
-                        {
-                          id: "acc_Golden",
-                          name: "Golden Years Care",
-                          avatar: "GY",
-                          color: "#EC4899",
-                          leads: "18 Ready Leads",
-                          services: ["Answer My Phones", "Call Leads & Qualify"],
-                          health: "Operational",
-                          retainer: "$1,800.00",
-                          payment: "Paid",
-                          score: 88,
-                          onboarded: "2026-04-15"
-                        },
-                        {
-                          id: "acc_Apex",
-                          name: "Apex Health",
-                          avatar: "AH",
-                          color: "#06B6D4",
-                          leads: "64 Ready Leads",
-                          services: ["Call Leads & Book", "Appointment Reminders", "Find New Leads"],
-                          health: "Operational",
-                          retainer: "$2,100.00",
-                          payment: "Paid",
-                          score: 85,
-                          onboarded: "2026-05-02"
-                        }
-                      ];
+                      const allClients = clients;
 
                       // Sort based on selected filter
                       let sortedClients = [...allClients];
@@ -2630,112 +2770,7 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const allClients = [
-                        {
-                          id: "acc_Harbor",
-                          name: "Harbor Financial",
-                          avatar: "HF",
-                          color: "#0F172A",
-                          leads: "210 Ready Leads",
-                          services: ["Do Everything (Full Funnel)"],
-                          health: "Operational",
-                          retainer: "$5,000.00",
-                          payment: "Paid",
-                          score: 99,
-                          onboarded: "2026-06-28"
-                        },
-                        {
-                          id: "acc_Acme",
-                          name: "Acme Realty",
-                          avatar: "AR",
-                          color: "#4F46FF",
-                          leads: "24 Ready Leads",
-                          services: ["Answer My Phones", "Call Leads & Book", "Fix Lead List"],
-                          health: errors.some(e => e.client && e.client.includes("Acme")) ? "Degraded" : "Operational",
-                          retainer: "$1,200.00",
-                          payment: "Paid",
-                          score: 74,
-                          onboarded: "2026-03-10"
-                        },
-                        {
-                          id: "acc_Northwind",
-                          name: "Northwind Logistics",
-                          avatar: "NL",
-                          color: "#10B981",
-                          leads: "152 Ready Leads",
-                          services: ["Find New Leads", "Fix Lead List"],
-                          health: "Operational",
-                          retainer: "$2,500.00",
-                          payment: "Paid",
-                          score: 95,
-                          onboarded: "2026-05-28"
-                        },
-                        {
-                          id: "acc_1199",
-                          name: "1199 SEIU",
-                          avatar: "SE",
-                          color: "#F59E0B",
-                          leads: "85 Ready Leads",
-                          services: ["Answer My Phones", "Appointment Reminders"],
-                          health: "Operational",
-                          retainer: "$3,800.00",
-                          payment: "Paid",
-                          score: 98,
-                          onboarded: "2026-06-10"
-                        },
-                        {
-                          id: "acc_Sunrise",
-                          name: "Sunrise Dental",
-                          avatar: "SD",
-                          color: "#EF4444",
-                          leads: errors.some(e => e.client && e.client.includes("Sunrise")) ? "0 Leads (Paused)" : "45 Ready Leads",
-                          services: ["Call Leads & Qualify", "Fix Lead List", "Find New Leads"],
-                          health: errors.some(e => e.client && e.client.includes("Sunrise")) ? "Paused" : "Operational",
-                          retainer: "$1,500.00",
-                          payment: "Unpaid",
-                          score: 35,
-                          onboarded: "2026-06-18"
-                        },
-                        {
-                          id: "acc_Oakwood",
-                          name: "Oakwood Estates",
-                          avatar: "OE",
-                          color: "#8B5CF6",
-                          leads: "42 Ready Leads",
-                          services: ["Call Leads & Book", "Find New Leads"],
-                          health: "Operational",
-                          retainer: "$950.00",
-                          payment: "Paid",
-                          score: 92,
-                          onboarded: "2026-06-25"
-                        },
-                        {
-                          id: "acc_Golden",
-                          name: "Golden Years Care",
-                          avatar: "GY",
-                          color: "#EC4899",
-                          leads: "18 Ready Leads",
-                          services: ["Answer My Phones", "Call Leads & Qualify"],
-                          health: "Operational",
-                          retainer: "$1,800.00",
-                          payment: "Paid",
-                          score: 88,
-                          onboarded: "2026-04-15"
-                        },
-                        {
-                          id: "acc_Apex",
-                          name: "Apex Health",
-                          avatar: "AH",
-                          color: "#06B6D4",
-                          leads: "64 Ready Leads",
-                          services: ["Call Leads & Book", "Appointment Reminders", "Find New Leads"],
-                          health: "Operational",
-                          retainer: "$2,100.00",
-                          payment: "Paid",
-                          score: 85,
-                          onboarded: "2026-05-02"
-                        }
-                      ];
+                      const allClients = clients;
 
                       // Search filter logic
                       const queryClean = directorySearch.trim().toLowerCase();
@@ -2932,6 +2967,339 @@ export default function Home() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {currentView === "add-organization" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "600px" }}>
+            
+            <div style={{ marginBottom: "8px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#1F2433", margin: 0 }}>Onboard New Client</h3>
+              <p style={{ fontSize: "12px", color: "#8A90A0", marginTop: "4px", margin: 0 }}>
+                Provide the essential details to register a new organization on the Reacher AI calling platform.
+              </p>
+            </div>
+
+            {onboardSuccessMessage ? (
+              <div style={{ 
+                display: "flex", 
+                flexDirection: "column", 
+                alignItems: "flex-start", 
+                padding: "24px 0",
+                gap: "12px"
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  width: "40px", 
+                  height: "40px", 
+                  borderRadius: "50%", 
+                  background: "#ECFDF5", 
+                  color: "#10B981" 
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 style={{ fontSize: "15px", fontWeight: 600, color: "#065F46", margin: 0 }}>Onboarding Successful</h4>
+                  <p style={{ fontSize: "12px", color: "#047857", marginTop: "4px", margin: 0 }}>
+                    {onboardSuccessMessage} Redirecting to dashboard...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleOnboardSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                
+                {/* Horizontal side-by-side fields grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px 20px" }}>
+                  
+                  {/* Business Name */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Business name <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+                          <line x1="9" y1="22" x2="9" y2="16" />
+                          <line x1="15" y1="22" x2="15" y2="16" />
+                          <line x1="9" y1="16" x2="15" y2="16" />
+                          <path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01" />
+                        </svg>
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="e.g. BlueSky Insurance"
+                        value={orgName}
+                        onChange={(e) => setOrgName(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px 10px 36px",
+                          fontSize: "12px",
+                          border: onboardErrors.name ? "1px solid #EF4444" : "1px solid #ECEEF2",
+                          borderRadius: "8px",
+                          outline: "none",
+                          color: "#1F2433",
+                          fontFamily: "inherit",
+                          background: "#FFFFFF",
+                          transition: "all 150ms ease"
+                        }}
+                      />
+                    </div>
+                    {onboardErrors.name && (
+                      <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>{onboardErrors.name}</span>
+                    )}
+                  </div>
+
+                  {/* Contact Name */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Contact name <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="e.g. John Doe"
+                        value={contactName}
+                        onChange={(e) => setContactName(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px 10px 36px",
+                          fontSize: "12px",
+                          border: onboardErrors.contactName ? "1px solid #EF4444" : "1px solid #ECEEF2",
+                          borderRadius: "8px",
+                          outline: "none",
+                          color: "#1F2433",
+                          fontFamily: "inherit",
+                          background: "#FFFFFF",
+                          transition: "all 150ms ease"
+                        }}
+                      />
+                    </div>
+                    {onboardErrors.contactName && (
+                      <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>{onboardErrors.contactName}</span>
+                    )}
+                  </div>
+
+                  {/* Contact Email */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Contact email <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                          <polyline points="22,6 12,13 2,6" />
+                        </svg>
+                      </span>
+                      <input
+                        type="email"
+                        placeholder="e.g. contact@bluesky.io"
+                        value={orgEmail}
+                        onChange={(e) => setOrgEmail(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px 10px 36px",
+                          fontSize: "12px",
+                          border: onboardErrors.email ? "1px solid #EF4444" : "1px solid #ECEEF2",
+                          borderRadius: "8px",
+                          outline: "none",
+                          color: "#1F2433",
+                          fontFamily: "inherit",
+                          background: "#FFFFFF",
+                          transition: "all 150ms ease"
+                        }}
+                      />
+                    </div>
+                    {onboardErrors.email && (
+                      <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>{onboardErrors.email}</span>
+                    )}
+                  </div>
+
+                  {/* Contact Phone */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Contact phone <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.82a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="e.g. +1 (555) 123-4567"
+                        value={orgPhone}
+                        onChange={(e) => setOrgPhone(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px 10px 36px",
+                          fontSize: "12px",
+                          border: onboardErrors.phone ? "1px solid #EF4444" : "1px solid #ECEEF2",
+                          borderRadius: "8px",
+                          outline: "none",
+                          color: "#1F2433",
+                          fontFamily: "inherit",
+                          background: "#FFFFFF",
+                          transition: "all 150ms ease"
+                        }}
+                      />
+                    </div>
+                    {onboardErrors.phone && (
+                      <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>{onboardErrors.phone}</span>
+                    )}
+                  </div>
+
+                  {/* Client Timezone */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Client timezone <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                      </span>
+                      <select
+                        value={orgTimezone}
+                        onChange={(e) => setOrgTimezone(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px 10px 36px",
+                          fontSize: "12px",
+                          border: onboardErrors.timezone ? "1px solid #EF4444" : "1px solid #ECEEF2",
+                          borderRadius: "8px",
+                          outline: "none",
+                          color: "#1F2433",
+                          fontFamily: "inherit",
+                          background: "#FFFFFF",
+                          transition: "all 150ms ease",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <optgroup label="North America">
+                          <option value="America/New_York">Eastern Time (ET)</option>
+                          <option value="America/Chicago">Central Time (CT)</option>
+                          <option value="America/Denver">Mountain Time (MT)</option>
+                          <option value="America/Phoenix">Mountain Standard Time (Phoenix)</option>
+                          <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                        </optgroup>
+                        <optgroup label="Europe & GMT">
+                          <option value="Europe/London">London / GMT</option>
+                          <option value="Europe/Paris">Paris / CET</option>
+                        </optgroup>
+                        <optgroup label="Asia & Pacific">
+                          <option value="Asia/Kolkata">Kolkata / IST</option>
+                          <option value="Asia/Tokyo">Tokyo / JST</option>
+                          <option value="Australia/Sydney">Sydney / AEDT</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                          <option value="UTC">Coordinated Universal Time (UTC)</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                    {onboardErrors.timezone && (
+                      <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>{onboardErrors.timezone}</span>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: "10px", marginTop: "8px", justifyContent: "flex-start" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrgName("");
+                      setContactName("");
+                      setOrgEmail("");
+                      setOrgPhone("");
+                      setOrgTimezone("America/New_York");
+                      setOnboardErrors({});
+                      setCurrentView("dashboard");
+                    }}
+                    style={{
+                      background: "#FFFFFF",
+                      border: "1px solid #ECEEF2",
+                      color: "#5A6072",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "all 150ms ease"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "#4F46FF";
+                      e.currentTarget.style.color = "#4F46FF";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "#ECEEF2";
+                      e.currentTarget.style.color = "#5A6072";
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isOnboarding}
+                    style={{
+                      background: isOnboarding ? "#A8AEBC" : "#4F46FF",
+                      color: "#FFFFFF",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "8px 24px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      cursor: isOnboarding ? "not-allowed" : "pointer",
+                      fontFamily: "inherit",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 150ms ease"
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isOnboarding) e.currentTarget.style.background = "#3F37D9";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isOnboarding) e.currentTarget.style.background = "#4F46FF";
+                    }}
+                  >
+                    {isOnboarding ? (
+                      <>
+                        <span style={{ 
+                          width: "12px", 
+                          height: "12px", 
+                          border: "2px solid #FFFFFF", 
+                          borderTop: "2px solid transparent", 
+                          borderRadius: "50%", 
+                          display: "inline-block",
+                          animation: "spin 1s linear infinite"
+                        }}></span>
+                        Saving...
+                      </>
+                    ) : (
+                      "Save"
+                    )}
+                  </button>
+                </div>
+
+              </form>
+            )}
           </div>
         )}
 
