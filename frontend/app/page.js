@@ -97,6 +97,56 @@ const SERVICE_SUB_OPTIONS = {
   ]
 };
 
+const generateMockPayments = () => {
+  const clients = [
+    "Harbor Financial",
+    "Acme Realty",
+    "Northwind Logistics",
+    "Sunrise Dental",
+    "Vertex Solar",
+    "Apex Labs",
+    "Pulse Media",
+    "Nova Retail"
+  ];
+  
+  const remarks = {
+    "Paid": ["Monthly Retainer", "CRM setup fee", "Lead generation bundle", "API usage fee"],
+    "Partial": ["Retainer deposit", "First milestone payment", "Platform access fee"],
+    "Unpaid": ["Overdue invoice (Net 30)", "Pending billing cycle", "Awaiting authorization"]
+  };
+
+  const statusOptions = ["Paid", "Paid", "Paid", "Partial", "Unpaid"]; // 60% Paid, 20% Partial, 20% Unpaid
+  const amountOptions = [1200, 1500, 2500, 3000, 5000, 6000];
+
+  const data = [];
+  data.push({ id: "pay_1", client: "Harbor Financial", amount: 5000, status: "Paid", date: "2026-06-28", remark: "June Monthly Retainer" });
+  data.push({ id: "pay_2", client: "Acme Realty", amount: 1200, status: "Paid", date: "2026-06-15", remark: "Google Ads & CRM management" });
+  data.push({ id: "pay_3", client: "Northwind Logistics", amount: 2500, status: "Paid", date: "2026-06-10", remark: "B2B SDR Prospecting" });
+  data.push({ id: "pay_4", client: "Sunrise Dental", amount: 1500, status: "Unpaid", date: "2026-06-01", remark: "Inbound answering line (Overdue)" });
+
+  let dateSeed = new Date("2026-06-20");
+  for (let i = 5; i <= 100; i++) {
+    dateSeed.setDate(dateSeed.getDate() - 3);
+    const dateStr = dateSeed.toISOString().split("T")[0];
+    
+    const client = clients[i % clients.length];
+    const status = statusOptions[i % statusOptions.length];
+    const amount = amountOptions[i % amountOptions.length];
+    const possibleRemarks = remarks[status];
+    const remark = possibleRemarks[i % possibleRemarks.length];
+
+    data.push({
+      id: `pay_${i}`,
+      client,
+      amount,
+      status,
+      date: dateStr,
+      remark: `${remark} - Month ${dateSeed.toLocaleString('default', { month: 'short' })}`
+    });
+  }
+  return data;
+};
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -119,22 +169,23 @@ export default function Home() {
   const [revenueHoveredIdx, setRevenueHoveredIdx] = useState(4);
   const revenueTimeframeRef = useRef(null);
 
-  const [paymentLogs, setPaymentLogs] = useState([
-    { id: "pay_1", client: "Harbor Financial", amount: 5000, status: "Paid", date: "2026-06-28", remark: "June Monthly Retainer" },
-    { id: "pay_2", client: "Acme Realty", amount: 1200, status: "Paid", date: "2026-06-15", remark: "Google Ads & CRM management" },
-    { id: "pay_3", client: "Northwind Logistics", amount: 2500, status: "Paid", date: "2026-06-10", remark: "B2B SDR Prospecting" },
-    { id: "pay_4", client: "Sunrise Dental", amount: 1500, status: "Unpaid", date: "2026-06-01", remark: "Inbound answering line (Overdue)" }
-  ]);
+  const [paymentLogs, setPaymentLogs] = useState(() => generateMockPayments());
   const [editingPaymentId, setEditingPaymentId] = useState(null);
   const [editingStatus, setEditingStatus] = useState("Paid");
   const [editingAmount, setEditingAmount] = useState("");
   const [editingRemark, setEditingRemark] = useState("");
+
+  const [activeFilterColumn, setActiveFilterColumn] = useState(null); // 'client', 'amount', 'status', 'date', 'remark'
+  const [filterSearches, setFilterSearches] = useState({ client: "", amount: "", status: "", date: "", remark: "" });
+  const [selectedFilters, setSelectedFilters] = useState({ client: {}, amount: {}, status: {}, date: {}, remark: {} });
+  const filterDropdownRef = useRef(null);
 
   useEffect(() => {
     function onClick(e) {
       if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
       if (timeframeRef.current && !timeframeRef.current.contains(e.target)) setShowTimeframeDropdown(false);
       if (revenueTimeframeRef.current && !revenueTimeframeRef.current.contains(e.target)) setShowRevenueTimeframeDropdown(false);
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) setActiveFilterColumn(null);
       if (paymentClientRef.current && !paymentClientRef.current.contains(e.target)) setPaymentClientOpen(false);
     }
     document.addEventListener("mousedown", onClick);
@@ -147,6 +198,181 @@ export default function Home() {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentRemark, setPaymentRemark] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const isRowVisible = (row) => {
+    if (selectedFilters.client && Object.values(selectedFilters.client).includes(false)) {
+      if (selectedFilters.client[row.client] === false) return false;
+    }
+    const amtStr = row.amount.toString();
+    if (selectedFilters.amount && Object.values(selectedFilters.amount).includes(false)) {
+      if (selectedFilters.amount[amtStr] === false) return false;
+    }
+    if (selectedFilters.status && Object.values(selectedFilters.status).includes(false)) {
+      if (selectedFilters.status[row.status] === false) return false;
+    }
+    if (selectedFilters.date && Object.values(selectedFilters.date).includes(false)) {
+      if (selectedFilters.date[row.date] === false) return false;
+    }
+    if (selectedFilters.remark && Object.values(selectedFilters.remark).includes(false)) {
+      if (selectedFilters.remark[row.remark] === false) return false;
+    }
+    return true;
+  };
+
+  const getFilteredLogsExcludingCol = (exclColName) => {
+    return paymentLogs.filter(row => {
+      if (exclColName !== 'client' && selectedFilters.client && Object.values(selectedFilters.client).includes(false)) {
+        if (selectedFilters.client[row.client] === false) return false;
+      }
+      const amtStr = row.amount.toString();
+      if (exclColName !== 'amount' && selectedFilters.amount && Object.values(selectedFilters.amount).includes(false)) {
+        if (selectedFilters.amount[amtStr] === false) return false;
+      }
+      if (exclColName !== 'status' && selectedFilters.status && Object.values(selectedFilters.status).includes(false)) {
+        if (selectedFilters.status[row.status] === false) return false;
+      }
+      if (exclColName !== 'date' && selectedFilters.date && Object.values(selectedFilters.date).includes(false)) {
+        if (selectedFilters.date[row.date] === false) return false;
+      }
+      if (exclColName !== 'remark' && selectedFilters.remark && Object.values(selectedFilters.remark).includes(false)) {
+        if (selectedFilters.remark[row.remark] === false) return false;
+      }
+      return true;
+    });
+  };
+
+  const renderFilterDropdown = (colName) => {
+    const visibleLogs = getFilteredLogsExcludingCol(colName);
+    const uniqueValues = Array.from(new Set(visibleLogs.map(p => colName === 'amount' ? p.amount.toString() : p[colName]))).sort();
+    const searchQuery = filterSearches[colName] || "";
+    const filteredValues = uniqueValues.filter(val => val.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const allSelected = filteredValues.every(val => selectedFilters[colName]?.[val] !== false);
+
+    return (
+      <div
+        ref={filterDropdownRef}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "absolute",
+          top: "100%",
+          left: "12px",
+          background: "#FFFFFF",
+          border: "1px solid #ECEEF2",
+          borderRadius: "10px",
+          boxShadow: "0 8px 24px rgba(31,36,51,0.12)",
+          padding: "10px",
+          zIndex: 100,
+          minWidth: "180px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          textTransform: "none",
+          fontWeight: "normal"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", border: "1px solid #ECEEF2", borderRadius: "6px", padding: "4px 8px" }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setFilterSearches(prev => ({ ...prev, [colName]: e.target.value }))}
+            style={{
+              border: "none",
+              outline: "none",
+              fontSize: "10px",
+              color: "#1F2433",
+              width: "100%",
+              fontFamily: "inherit"
+            }}
+          />
+        </div>
+
+        <div style={{ maxHeight: "120px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#1F2433", cursor: "pointer", padding: "2px 4px", borderRadius: "4px" }}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => {
+                setSelectedFilters(prev => {
+                  const colFilters = { ...prev[colName] };
+                  filteredValues.forEach(val => {
+                    colFilters[val] = !allSelected;
+                  });
+                  return { ...prev, [colName]: colFilters };
+                });
+              }}
+              style={{ cursor: "pointer" }}
+            />
+            <span style={{ fontWeight: 600 }}>Select All</span>
+          </label>
+
+          {filteredValues.map((val) => {
+            const isChecked = selectedFilters[colName]?.[val] !== false;
+            const displayVal = colName === 'amount' ? `$${parseFloat(val).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : val;
+
+            return (
+              <label
+                key={val}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "11px",
+                  color: "#5A6072",
+                  cursor: "pointer",
+                  padding: "2px 4px",
+                  borderRadius: "4px",
+                  transition: "background 150ms ease"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#F7F8FA"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => {
+                    setSelectedFilters(prev => {
+                      const colFilters = { ...prev[colName] };
+                      colFilters[val] = !isChecked;
+                      return { ...prev, [colName]: colFilters };
+                    });
+                  }}
+                  style={{ cursor: "pointer" }}
+                />
+                <span>{displayVal}</span>
+              </label>
+            );
+          })}
+        </div>
+
+        {Object.values(selectedFilters[colName] || {}).includes(false) && (
+          <button
+            onClick={() => {
+              setSelectedFilters(prev => ({ ...prev, [colName]: {} }));
+              setFilterSearches(prev => ({ ...prev, [colName]: "" }));
+            }}
+            style={{
+              border: "none",
+              background: "none",
+              color: "#EF4444",
+              fontSize: "10px",
+              fontWeight: 600,
+              cursor: "pointer",
+              textAlign: "left",
+              padding: "4px 4px 0 4px",
+              borderTop: "1px solid #F0F1F4",
+              marginTop: "4px"
+            }}
+          >
+            Clear Filter
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const handleLogPayment = (e) => {
     e.preventDefault();
@@ -1700,7 +1926,7 @@ export default function Home() {
                   return `$${dollar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 };
 
-                const xCoords = [60, 208, 356, 504, 652, 800, 948];
+                const xCoords = [10, 173.3, 336.7, 500, 663.3, 826.7, 990];
                 
                 const getBezierPath = (data) => {
                   let path = `M ${xCoords[0]} ${data[0]}`;
@@ -1709,9 +1935,9 @@ export default function Home() {
                     const y0 = data[i];
                     const x1 = xCoords[i + 1];
                     const y1 = data[i + 1];
-                    const cpX1 = x0 + 50;
+                    const cpX1 = x0 + 54;
                     const cpY1 = y0;
-                    const cpX2 = x1 - 50;
+                    const cpX2 = x1 - 54;
                     const cpY2 = y1;
                     path += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${x1} ${y1}`;
                   }
@@ -1720,7 +1946,7 @@ export default function Home() {
 
                 const revenue = TIMEFRAME_DATA[revenueTimeframe].revenue;
                 const cost = TIMEFRAME_DATA[revenueTimeframe].cost;
-                const revFillPath = `${getBezierPath(revenue)} L 948,150 L 60,150 Z`;
+                const revFillPath = `${getBezierPath(revenue)} L 990,140 L 10,140 Z`;
 
                 return (
                   <>
@@ -1834,159 +2060,178 @@ export default function Home() {
                       </span>
                     </div>
 
-                    {/* SVG Bezier Line Plot wrapper */}
-                    <div style={{ position: "relative", width: "100%", height: "240px" }}>
-                      <svg
-                        viewBox="0 0 1000 180"
-                        preserveAspectRatio="none"
-                        style={{ width: "100%", height: "100%", overflow: "visible" }}
-                      >
-                        {/* Grids and labels */}
-                        <line x1="60" y1="30" x2="948" y2="30" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
-                        <text x="50" y="33" textAnchor="end" fontSize="9" fill="#A3AED0" fontWeight="500">100k</text>
+                    {/* HTML Chart Layout Wrapper */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
+                      <div style={{ display: "flex", position: "relative", height: "150px", width: "100%" }}>
+                        {/* Y Axis Labels (HTML) */}
+                        <div style={{ position: "relative", width: "35px", height: "150px" }}>
+                          <div style={{ position: "absolute", top: "13.3%", transform: "translateY(-50%)", right: "8px", fontSize: "9px", color: "#A3AED0", fontWeight: "500" }}>100k</div>
+                          <div style={{ position: "absolute", top: "33.3%", transform: "translateY(-50%)", right: "8px", fontSize: "9px", color: "#A3AED0", fontWeight: "500" }}>75k</div>
+                          <div style={{ position: "absolute", top: "53.3%", transform: "translateY(-50%)", right: "8px", fontSize: "9px", color: "#A3AED0", fontWeight: "500" }}>50k</div>
+                          <div style={{ position: "absolute", top: "73.3%", transform: "translateY(-50%)", right: "8px", fontSize: "9px", color: "#A3AED0", fontWeight: "500" }}>25k</div>
+                          <div style={{ position: "absolute", top: "93.3%", transform: "translateY(-50%)", right: "8px", fontSize: "9px", color: "#A3AED0", fontWeight: "500" }}>0</div>
+                        </div>
 
-                        <line x1="60" y1="60" x2="948" y2="60" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
-                        <text x="50" y="63" textAnchor="end" fontSize="9" fill="#A3AED0" fontWeight="500">75k</text>
+                        {/* SVG Chart Container */}
+                        <div style={{ flex: 1, position: "relative", height: "150px" }}>
+                          <svg
+                            viewBox="0 0 1000 150"
+                            preserveAspectRatio="none"
+                            style={{ width: "100%", height: "150px", overflow: "visible" }}
+                          >
+                            {/* Horizontal Grid Lines */}
+                            <line x1="10" y1="20" x2="990" y2="20" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
+                            <line x1="10" y1="50" x2="990" y2="50" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
+                            <line x1="10" y1="80" x2="990" y2="80" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
+                            <line x1="10" y1="110" x2="990" y2="110" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
+                            <line x1="10" y1="140" x2="990" y2="140" stroke="#E2E8F0" strokeWidth="1" />
 
-                        <line x1="60" y1="90" x2="948" y2="90" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
-                        <text x="50" y="93" textAnchor="end" fontSize="9" fill="#A3AED0" fontWeight="500">50k</text>
+                            {/* Defs for gradients */}
+                            <defs>
+                              <linearGradient id="revenueGradRev" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#4F46FF" stopOpacity="0.25" />
+                                <stop offset="100%" stopColor="#4F46FF" stopOpacity="0.00" />
+                              </linearGradient>
+                            </defs>
 
-                        <line x1="60" y1="120" x2="948" y2="120" stroke="#F1F3F6" strokeWidth="1" strokeDasharray="3 3" />
-                        <text x="50" y="123" textAnchor="end" fontSize="9" fill="#A3AED0" fontWeight="500">25k</text>
+                            {/* Fill path for area under revenue curve */}
+                            <path d={revFillPath} fill="url(#revenueGradRev)" />
 
-                        <line x1="60" y1="150" x2="948" y2="150" stroke="#E2E8F0" strokeWidth="1" />
-                        <text x="50" y="153" textAnchor="end" fontSize="9" fill="#A3AED0" fontWeight="500">0</text>
+                            {/* Dashed vertical line for active column */}
+                            {revenueHoveredIdx !== null && (
+                              <line
+                                x1={xCoords[revenueHoveredIdx]}
+                                y1="20"
+                                x2={xCoords[revenueHoveredIdx]}
+                                y2="140"
+                                stroke="#4F46FF"
+                                strokeWidth="1.5"
+                                strokeDasharray="4 4"
+                              />
+                            )}
 
-                        {/* X Axis Labels */}
+                            {/* Cost Line (Reddish Orange) */}
+                            <path
+                              d={getBezierPath(cost)}
+                              fill="none"
+                              stroke="#F59E0B"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                            />
+
+                            {/* Revenue Line (Indigo) */}
+                            <path
+                              d={getBezierPath(revenue)}
+                              fill="none"
+                              stroke="#4F46FF"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                            />
+
+                            {/* Active Dots on Hover */}
+                            {revenueHoveredIdx !== null && (
+                              <>
+                                <circle
+                                  cx={xCoords[revenueHoveredIdx]}
+                                  cy={revenue[revenueHoveredIdx]}
+                                  r="6"
+                                  fill="#4F46FF"
+                                  stroke="#FFFFFF"
+                                  strokeWidth="2"
+                                  style={{ filter: "drop-shadow(0px 2px 4px rgba(79, 70, 255, 0.4))" }}
+                                />
+                                <circle
+                                  cx={xCoords[revenueHoveredIdx]}
+                                  cy={cost[revenueHoveredIdx]}
+                                  r="6"
+                                  fill="#F59E0B"
+                                  stroke="#FFFFFF"
+                                  strokeWidth="2"
+                                  style={{ filter: "drop-shadow(0px 2px 4px rgba(245, 158, 11, 0.4))" }}
+                                />
+                              </>
+                            )}
+
+                            {/* Hover Overlay Columns */}
+                            {xCoords.map((x, idx) => (
+                              <rect
+                                key={idx}
+                                x={x - 81.6}
+                                y="10"
+                                width="163.3"
+                                height="130"
+                                fill="transparent"
+                                style={{ cursor: "pointer" }}
+                                onMouseEnter={() => setRevenueHoveredIdx(idx)}
+                              />
+                            ))}
+                          </svg>
+
+                          {/* Tooltip Overlay */}
+                          {revenueHoveredIdx !== null && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${(xCoords[revenueHoveredIdx] / 1000) * 100}%`,
+                                top: `${(revenue[revenueHoveredIdx] / 150) * 100 - 30}%`,
+                                transform: "translateX(-50%)",
+                                background: "#1E293B",
+                                color: "#FFFFFF",
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                                zIndex: 10,
+                                pointerEvents: "none"
+                              }}
+                            >
+                              <div style={{ fontSize: "9px", color: "#94A3B8", fontWeight: 500 }}>Revenue</div>
+                              {getTooltipValue(revenue[revenueHoveredIdx])}
+                              {/* Tooltip Arrow */}
+                              <div style={{
+                                position: "absolute",
+                                bottom: "-4px",
+                                left: "50%",
+                                transform: "translateX(-50%) rotate(45deg)",
+                                width: "8px",
+                                height: "8px",
+                                background: "#1E293B"
+                              }} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* X Axis Labels (HTML) */}
+                      <div style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        paddingLeft: "calc(35px + 1%)",
+                        paddingRight: "1%",
+                        fontSize: "9px",
+                        color: "#A3AED0",
+                        fontWeight: "500",
+                        marginTop: "6px"
+                      }}>
                         {TIMEFRAME_DATA[revenueTimeframe].labels.map((lbl, idx) => (
-                          <text
+                          <span
                             key={lbl}
-                            x={xCoords[idx]}
-                            y="168"
-                            textAnchor="middle"
-                            fontSize="9"
-                            fill={revenueHoveredIdx === idx ? "#1F2433" : "#A3AED0"}
-                            fontWeight={revenueHoveredIdx === idx ? "600" : "500"}
+                            style={{
+                              width: "50px",
+                              textAlign: "center",
+                              marginLeft: idx === 0 ? "-25px" : "0px",
+                              marginRight: idx === 6 ? "-25px" : "0px",
+                              color: revenueHoveredIdx === idx ? "#1F2433" : "#A3AED0",
+                              fontWeight: revenueHoveredIdx === idx ? "600" : "500",
+                              transition: "color 150ms ease"
+                            }}
                           >
                             {lbl}
-                          </text>
+                          </span>
                         ))}
-
-                        {/* Defs for gradients */}
-                        <defs>
-                          <linearGradient id="revenueGradRev" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#4F46FF" stopOpacity="0.25" />
-                            <stop offset="100%" stopColor="#4F46FF" stopOpacity="0.00" />
-                          </linearGradient>
-                        </defs>
-
-                        {/* Fill path for area under revenue curve */}
-                        <path d={revFillPath} fill="url(#revenueGradRev)" />
-
-                        {/* Dashed vertical line for active column */}
-                        {revenueHoveredIdx !== null && (
-                          <line
-                            x1={xCoords[revenueHoveredIdx]}
-                            y1="30"
-                            x2={xCoords[revenueHoveredIdx]}
-                            y2="150"
-                            stroke="#4F46FF"
-                            strokeWidth="1.5"
-                            strokeDasharray="4 4"
-                          />
-                        )}
-
-                        {/* Cost Line (Reddish Orange) */}
-                        <path
-                          d={getBezierPath(cost)}
-                          fill="none"
-                          stroke="#F59E0B"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                        />
-
-                        {/* Revenue Line (Indigo) */}
-                        <path
-                          d={getBezierPath(revenue)}
-                          fill="none"
-                          stroke="#4F46FF"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                        />
-
-                        {/* Active Dots on Hover */}
-                        {revenueHoveredIdx !== null && (
-                          <>
-                            <circle
-                              cx={xCoords[revenueHoveredIdx]}
-                              cy={revenue[revenueHoveredIdx]}
-                              r="6"
-                              fill="#4F46FF"
-                              stroke="#FFFFFF"
-                              strokeWidth="2"
-                              style={{ filter: "drop-shadow(0px 2px 4px rgba(79, 70, 255, 0.4))" }}
-                            />
-                            <circle
-                              cx={xCoords[revenueHoveredIdx]}
-                              cy={cost[revenueHoveredIdx]}
-                              r="6"
-                              fill="#F59E0B"
-                              stroke="#FFFFFF"
-                              strokeWidth="2"
-                              style={{ filter: "drop-shadow(0px 2px 4px rgba(245, 158, 11, 0.4))" }}
-                            />
-                          </>
-                        )}
-
-                        {/* Hover Overlay Columns */}
-                        {xCoords.map((x, idx) => (
-                          <rect
-                            key={idx}
-                            x={x - 74}
-                            y="10"
-                            width="148"
-                            height="140"
-                            fill="transparent"
-                            style={{ cursor: "pointer" }}
-                            onMouseEnter={() => setRevenueHoveredIdx(idx)}
-                          />
-                        ))}
-                      </svg>
-
-                      {/* Tooltip Overlay */}
-                      {revenueHoveredIdx !== null && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: `${(xCoords[revenueHoveredIdx] / 1000) * 100}%`,
-                            top: `${(revenue[revenueHoveredIdx] / 180) * 100 - 15}%`,
-                            transform: "translateX(-50%)",
-                            background: "#1E293B",
-                            color: "#FFFFFF",
-                            padding: "6px 10px",
-                            borderRadius: "6px",
-                            fontSize: "11px",
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                            zIndex: 10,
-                            pointerEvents: "none"
-                          }}
-                        >
-                          <div style={{ fontSize: "9px", color: "#94A3B8", fontWeight: 500 }}>Revenue</div>
-                          {getTooltipValue(revenue[revenueHoveredIdx])}
-                          {/* Tooltip Arrow */}
-                          <div style={{
-                            position: "absolute",
-                            bottom: "-4px",
-                            left: "50%",
-                            transform: "translateX(-50%) rotate(45deg)",
-                            width: "8px",
-                            height: "8px",
-                            background: "#1E293B"
-                          }} />
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </>
                 );
@@ -2000,20 +2245,151 @@ export default function Home() {
                 <div style={{ fontSize: "11px", color: "#8A90A0" }}>Detailed logs of client retainers, transaction status, and comments. Click Edit to mark unpaid accounts as paid.</div>
               </div>
 
-              <div style={{ overflowX: "auto" }}>
+              <div style={{ overflowX: "auto", minHeight: "280px" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #ECEEF2" }}>
-                      <th style={{ width: "25%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>Client Name</th>
-                      <th style={{ width: "15%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>Amount</th>
-                      <th style={{ width: "18%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>Status</th>
-                      <th style={{ width: "15%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>Payment Date</th>
-                      <th style={{ width: "20%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>Remark</th>
+                      
+                      {/* Client Name Column */}
+                      <th style={{ position: "relative", width: "25%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          Client Name
+                          <button
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterColumn(activeFilterColumn === "client" ? null : "client");
+                            }}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              padding: "2px",
+                              display: "flex",
+                              alignItems: "center",
+                              color: Object.values(selectedFilters.client || {}).includes(false) ? "#4F46FF" : "#8A90A0",
+                              transition: "color 150ms ease"
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                          </button>
+                        </div>
+                        {activeFilterColumn === "client" && renderFilterDropdown("client")}
+                      </th>
+
+                      {/* Amount Column */}
+                      <th style={{ position: "relative", width: "15%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          Amount
+                          <button
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterColumn(activeFilterColumn === "amount" ? null : "amount");
+                            }}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              padding: "2px",
+                              display: "flex",
+                              alignItems: "center",
+                              color: Object.values(selectedFilters.amount || {}).includes(false) ? "#4F46FF" : "#8A90A0",
+                              transition: "color 150ms ease"
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                          </button>
+                        </div>
+                        {activeFilterColumn === "amount" && renderFilterDropdown("amount")}
+                      </th>
+
+                      {/* Status Column */}
+                      <th style={{ position: "relative", width: "18%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          Status
+                          <button
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterColumn(activeFilterColumn === "status" ? null : "status");
+                            }}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              padding: "2px",
+                              display: "flex",
+                              alignItems: "center",
+                              color: Object.values(selectedFilters.status || {}).includes(false) ? "#4F46FF" : "#8A90A0",
+                              transition: "color 150ms ease"
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                          </button>
+                        </div>
+                        {activeFilterColumn === "status" && renderFilterDropdown("status")}
+                      </th>
+
+                      {/* Payment Date Column */}
+                      <th style={{ position: "relative", width: "15%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          Payment Date
+                          <button
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterColumn(activeFilterColumn === "date" ? null : "date");
+                            }}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              padding: "2px",
+                              display: "flex",
+                              alignItems: "center",
+                              color: Object.values(selectedFilters.date || {}).includes(false) ? "#4F46FF" : "#8A90A0",
+                              transition: "color 150ms ease"
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                          </button>
+                        </div>
+                        {activeFilterColumn === "date" && renderFilterDropdown("date")}
+                      </th>
+
+                      {/* Remark Column */}
+                      <th style={{ position: "relative", width: "20%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          Remark
+                          <button
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterColumn(activeFilterColumn === "remark" ? null : "remark");
+                            }}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              padding: "2px",
+                              display: "flex",
+                              alignItems: "center",
+                              color: Object.values(selectedFilters.remark || {}).includes(false) ? "#4F46FF" : "#8A90A0",
+                              transition: "color 150ms ease"
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                          </button>
+                        </div>
+                        {activeFilterColumn === "remark" && renderFilterDropdown("remark")}
+                      </th>
+
                       <th style={{ width: "12%", fontSize: "10px", fontWeight: 600, color: "#8A90A0", padding: "10px 12px", textTransform: "uppercase" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paymentLogs.map((log) => {
+                    {paymentLogs.filter(isRowVisible).map((log) => {
                       const isEditing = editingPaymentId === log.id;
 
                       return (
