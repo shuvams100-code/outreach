@@ -8,6 +8,7 @@ const INITIAL_CLIENTS = [
     id: "acc_Harbor",
     name: "Harbor Financial",
     industry: "Financial Services",
+    targetCustomerType: "business",
     email: "contact@harborfin.com",
     contact: "+1 (555) 120-3456",
     contactName: "Marcus Reid",
@@ -384,6 +385,7 @@ export default function Home() {
   // Onboard New Organization Form State
   const [orgName, setOrgName] = useState("");
   const [orgIndustry, setOrgIndustry] = useState("");
+  const [orgCustomerType, setOrgCustomerType] = useState(""); // "business" | "consumer" — gates scrape/enrich
   const [contactName, setContactName] = useState("");
   const [orgEmail, setOrgEmail] = useState("");
   const [orgPhone, setOrgPhone] = useState("");
@@ -773,6 +775,7 @@ export default function Home() {
     if (!c) return;
     setOrgName(c.name || "");
     setOrgIndustry(c.industry || "");
+    setOrgCustomerType(c.targetCustomerType || "");
     setContactName(c.contactName || "");
     setOrgEmail(c.email || "");
     setOrgPhone(c.contactPhone || c.contact || "");
@@ -989,6 +992,7 @@ Always handle objections politely.`;
       errs.phone = "Please enter a valid phone number.";
     }
     if (!orgTimezone) errs.timezone = "Please select a timezone.";
+    if (!orgCustomerType) errs.customerType = true;
 
     if (Object.keys(errs).length > 0) {
       setOnboardErrors(errs);
@@ -1007,6 +1011,7 @@ Always handle objections politely.`;
         const patch = {
           name: orgName.trim(),
           industry: orgIndustry.trim(),
+          targetCustomerType: orgCustomerType,
           email: orgEmail.trim(),
           contact: `${contactName.trim()} (${orgPhone.trim()})`,
           contactName: contactName.trim(),
@@ -1016,7 +1021,7 @@ Always handle objections politely.`;
         };
         setClients(prev => prev.map(c => c.id === editingClientId ? { ...c, ...patch } : c));
         setOnboardedClient(prev => prev ? { ...prev, ...patch } : prev);
-        setOrgName(""); setOrgIndustry(""); setContactName(""); setOrgEmail(""); setOrgPhone(""); setOrgTimezone("America/New_York");
+        setOrgName(""); setOrgIndustry(""); setOrgCustomerType(""); setContactName(""); setOrgEmail(""); setOrgPhone(""); setOrgTimezone("America/New_York");
         setIsOnboarding(false);
         setShowOnboardModal(false);   // just close — details are already updated
         setEditingClientId(null);
@@ -1032,6 +1037,7 @@ Always handle objections politely.`;
         id: newId,
         name: orgName.trim(),
         industry: orgIndustry.trim(),
+        targetCustomerType: orgCustomerType,
         email: orgEmail.trim(),
         contact: `${contactName.trim()} (${orgPhone.trim()})`,
         contactName: contactName.trim(),
@@ -1062,6 +1068,7 @@ Always handle objections politely.`;
 
       setOrgName("");
       setOrgIndustry("");
+      setOrgCustomerType("");
       setContactName("");
       setOrgEmail("");
       setOrgPhone("");
@@ -3466,6 +3473,34 @@ Always handle objections politely.`;
                     </div>
                   </div>
 
+                  {/* Target customer type — gates scraping/enrichment (legal) */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: "1 / -1" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Who does this client sell to? <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
+                    </label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      {[
+                        { value: "business", label: "Businesses (B2B)", hint: "Can scrape + enrich leads" },
+                        { value: "consumer", label: "Consumers (B2C)", hint: "No scraping/enrichment — upload only" },
+                      ].map((opt) => {
+                        const sel = orgCustomerType === opt.value;
+                        return (
+                          <div
+                            key={opt.value}
+                            onClick={() => setOrgCustomerType(opt.value)}
+                            style={{ flex: 1, padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: sel ? "2px solid #4F46FF" : (onboardErrors.customerType ? "1px solid #EF4444" : "1px solid #ECEEF2"), background: sel ? "#F4F5FF" : "#FFFFFF", transition: "all 150ms ease" }}
+                          >
+                            <div style={{ fontSize: "12px", fontWeight: 600, color: sel ? "#4F46FF" : "#1F2433" }}>{opt.label}</div>
+                            <div style={{ fontSize: "10.5px", color: "#8A90A0", marginTop: "2px" }}>{opt.hint}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {onboardErrors.customerType && (
+                      <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>Please choose who this client sells to.</span>
+                    )}
+                  </div>
+
                 </div>
 
                 {/* Actions */}
@@ -3475,6 +3510,7 @@ Always handle objections politely.`;
                     onClick={() => {
                       setOrgName("");
                       setOrgIndustry("");
+                      setOrgCustomerType("");
                       setContactName("");
                       setOrgEmail("");
                       setOrgPhone("");
@@ -3680,10 +3716,13 @@ Always handle objections politely.`;
                   }
                 ].map((svc) => {
                   const isSelected = selectedServiceCategory === svc.id;
+                  // Lead Generation = scraping → B2B only. Block it for consumer clients (legal).
+                  const isBlocked = svc.id === "Lead Generation" && onboardedClient?.targetCustomerType !== "business";
                   return (
                     <div
                       key={svc.id}
-                      onClick={() => setSelectedServiceCategory(svc.id)}
+                      onClick={() => { if (!isBlocked) setSelectedServiceCategory(svc.id); }}
+                      title={isBlocked ? "Lead Generation (scraping) is only available for B2B clients." : undefined}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -3692,17 +3731,18 @@ Always handle objections politely.`;
                         background: isSelected ? "#F4F5FF" : "#FFFFFF",
                         border: isSelected ? "2px solid #4F46FF" : "1px solid #ECEEF2",
                         borderRadius: "10px",
-                        cursor: "pointer",
+                        cursor: isBlocked ? "not-allowed" : "pointer",
+                        opacity: isBlocked ? 0.45 : 1,
                         transition: "all 150ms ease"
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) {
+                        if (!isSelected && !isBlocked) {
                           e.currentTarget.style.borderColor = "#CBD2DD";
                           e.currentTarget.style.background = "#F9FAFB";
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (!isSelected) {
+                        if (!isSelected && !isBlocked) {
                           e.currentTarget.style.borderColor = "#ECEEF2";
                           e.currentTarget.style.background = "#FFFFFF";
                         }
@@ -3955,20 +3995,26 @@ Always handle objections politely.`;
 
                           {/* Checkbox 2: Scrape / find leads */}
                           {(() => {
-                            const isScrapeEnabled = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
+                            const isBusiness = onboardedClient?.targetCustomerType === "business";
+                            const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
+                            const isScrapeEnabled = isBusiness && hasLeadGen;
                             return (
                               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                 <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: isScrapeEnabled ? "#1F2433" : "#A0A6B4", cursor: isScrapeEnabled ? "pointer" : "not-allowed" }}>
                                   <input
                                     type="checkbox"
                                     disabled={!isScrapeEnabled}
-                                    checked={isScrapeChecked}
+                                    checked={isScrapeChecked && isScrapeEnabled}
                                     onChange={(e) => setIsScrapeChecked(e.target.checked)}
                                     style={{ accentColor: "#4F46FF", cursor: isScrapeEnabled ? "pointer" : "not-allowed" }}
                                   />
                                   <span>Scrape / find leads</span>
                                 </label>
-                                {!isScrapeEnabled && (
+                                {!isBusiness ? (
+                                  <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
+                                    Scraping is only for B2B clients — this client sells to consumers, so leads must be uploaded.
+                                  </span>
+                                ) : !hasLeadGen && (
                                   <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
                                     Enable the Lead Generation service for this client to use scraping.
                                   </span>
@@ -4935,6 +4981,9 @@ Always handle objections politely.`;
                     </div>
                     {!isEnrichmentCollapsed && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        {onboardedClient?.targetCustomerType !== "business" ? (
+                          <span style={{ fontSize: "12px", color: "#D97706" }}>Enrichment is only for B2B clients — this client sells to consumers, so leads aren&apos;t researched or enriched.</span>
+                        ) : (<>
                         <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
                           <input type="checkbox" checked={enrichEnabled} onChange={(e) => setEnrichEnabled(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
                           Enrich each lead before dialing
@@ -4968,6 +5017,7 @@ Always handle objections politely.`;
                             )}
                           </div>
                         )}
+                        </>)}
                       </div>
                     )}
                   </div>

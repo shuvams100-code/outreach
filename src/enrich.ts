@@ -325,7 +325,15 @@ export async function enrichAccount(accountId: string): Promise<{
   errors: number;
 }> {
   // The account's ICP (per-account; null = keep everything) drives the fit decision.
-  const { data: acct } = await supabase.from("accounts").select("icp_description").eq("id", accountId).single();
+  const { data: acct } = await supabase.from("accounts").select("icp_description, target_customer_type").eq("id", accountId).single();
+
+  // LEGAL GATE: enrichment (researching each lead online) is only for B2B. For consumer audiences — or
+  // any account not explicitly 'business' — we never enrich individuals. Authoritative engine-side guard.
+  if (acct?.target_customer_type !== "business") {
+    console.log(`[enrich] account ${accountId} is not B2B (target_customer_type=${acct?.target_customer_type ?? "unset"}) — enrichment skipped (not permitted for consumer audiences).`);
+    return { processed: 0, enriched: 0, disqualified: 0, failed: 0, errors: 0 };
+  }
+
   const icp = acct?.icp_description ?? null;
 
   const { data: leads, error } = await supabase

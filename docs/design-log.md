@@ -4,6 +4,16 @@ A running record of every visual/design decision: colors, shapes, components, ty
 
 ---
 
+## 2026-06-30 (B2B/B2C gate)
+
+### Target-customer-type field gates scraping + enrichment (legal)
+- **Onboarding** now has a required "Who does this client sell to?" choice — **Businesses (B2B)** / **Consumers (B2C)** (two-card selector, validated). Stored as `targetCustomerType`.
+- **Outbound config gating (consumer = restricted):** Scrape lead-source disabled (note: "Scraping is only for B2B — upload instead"); Enrichment card shows a locked "not for consumers" note instead of the toggle; the **Lead Generation** card in the service picker is greyed/blocked for consumer clients.
+- **Backend (authoritative, REAL):** added `accounts.target_customer_type` column; `scrape.ts` (`scrapeAccount`) and `enrich.ts` (`enrichAccount`) now refuse to run unless the account is explicitly `business` (unset/consumer → skipped). This is the real legal guard — UI is just the first layer.
+- Harbor set to `business` (demo keeps scrape/enrich). Tenant-0 backfilled to `business`.
+
+---
+
 ## 2026-06-30 (config screen — editable + voicemail off)
 
 - **Advanced "Configured ✓" cards made editable** (were all `readOnly` hardcoded): Retry & Pacing (attempts/gap/cap), Enrichment (on + depth dropdown), Scraper Sources (toggleable chips), Call Limits (max length/leads). New state + saved into `serviceConfigs`.

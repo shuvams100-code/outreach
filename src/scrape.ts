@@ -133,10 +133,18 @@ export async function scrapeAccount(accountId: string, maxItems?: number) {
 
   const { data: acct, error: acctErr } = await supabase
     .from("accounts")
-    .select("search_query, geo_city, geo_state, lead_cap_per_run, sources, icp_description")
+    .select("search_query, geo_city, geo_state, lead_cap_per_run, sources, icp_description, target_customer_type")
     .eq("id", accountId)
     .single();
   if (acctErr || !acct) throw new Error(`Account ${accountId} not found: ${acctErr?.message}`);
+
+  // LEGAL GATE: scraping public data is only permitted for B2B accounts. Anything that isn't explicitly
+  // 'business' (consumer, or unset) is refused — never scrape individuals' data. This is the authoritative
+  // guard; the UI also hides the option, but the engine must never rely on that.
+  if (acct.target_customer_type !== "business") {
+    console.log(`[scrape] account ${accountId} is not B2B (target_customer_type=${acct.target_customer_type ?? "unset"}) — scraping skipped (not permitted for consumer audiences).`);
+    return { skipped: "not a B2B account — scraping not permitted" as const };
+  }
 
   // No search term set but an ICP is? Derive the term from the ICP and save it (one-time per account).
   if (!acct.search_query && acct.icp_description) {

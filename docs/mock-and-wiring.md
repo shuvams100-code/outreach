@@ -46,6 +46,7 @@ Today the **entire frontend is mock** — no screen talks to Supabase or the bac
 | 🟡 Voicemail | UI now states "never left, hang up on machine" (correct). Engine already never leaves one (`amd` detect → no_answer; `leave_voicemail`/`voicemail_message` cols unused) | **verify** VAPI hangs up immediately on detection so no minutes are wasted | `call.ts` `amd`, VAPI |
 | 🔴 Advanced config (retry/cap/enrichment/sources/call limits) | now **editable** in UI, but local-only | persist to `accounts` (`retry_rules`, `daily_dial_cap`, `enrichment_*`, `sources`, `max_call_duration_seconds`, `lead_cap_per_run`) | `accounts` |
 | 🟢→🔴 Endings (check avail / book / opt-out) | shown locked (correct) | come from the preset's `enabled_tools` | `presets.ts` `enabled_tools` |
+| 🟡 Target customer type (B2B/B2C) | collected at onboarding (local), **but backend guard is REAL** | persist the choice to `accounts.target_customer_type` (column added) | `accounts.target_customer_type` |
 | 🔴 ICP | local text | `accounts.icp_description` (also drives search terms) | `accounts`, `icp.ts deriveSearchTerm` |
 | 🔴 Lead source (scrape / upload) | single toggle, no gating | **multi-select**, and **Scrape gated on the client having an active Lead Generation service**; upload always on | services state; `accounts.scraping_enabled` |
 | 🔴 Scrape targeting (City/State/Radius/Business type) | inputs only | `accounts.geo_city`, `geo_state`, `geo_radius_km`, `business_type`, `search_query` | `accounts` |
