@@ -790,11 +790,28 @@ export default function Home() {
     const offerText = clientOffer ? `the offer: "${clientOffer}"` : "our services";
     const icpText = icpDescription ? `targeting: ${icpDescription}` : "our target audience";
     
-    const generated = `You are a warm, sharp, persuasive outbound sales rep calling on behalf of the business.
+    let generated = "";
+    if (configuringService === "Reactivation & Renewals") {
+      if (scriptVariant === "renewals_winback") {
+        generated = `You are calling customers of the business described in your context whose contract or subscription is expiring or recently lapsed.
+Your primary goal is to save the account, discuss renewing their subscription, and explain the value of continuing.
+Warmly reference their relationship with us, highlight the value they stand to lose if they lapse, and handle any hesitation or objections calmly.
+When they agree to set up a renewal or continue their service, check calendar availability and book the slot.
+Never pressure; make staying easy and pleasant.`;
+      } else {
+        generated = `You are calling past or dormant leads on behalf of the business described in your context who previously showed interest but went quiet.
+Your primary goal is to re-engage them, check if their need or interest is still active, and offer ${offerText}.
+Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest.
+If they are open, check calendar availability and book a time to get them back on the calendar.
+Be gracious, warm, and helpful. If they've moved on, thank them politely.`;
+      }
+    } else {
+      generated = `You are a warm, sharp, persuasive outbound sales rep calling on behalf of the business.
 Your primary goal is to pitch ${offerText} to prospects ${icpText}.
 Speak naturally, asking one question at a time. Qualify the prospect lightly.
 When they express interest in booking a demo/meeting ${modeText}, check calendar availability and book the slot.
 Always handle objections politely.`;
+    }
     
     setScriptText(generated);
   };
@@ -833,10 +850,10 @@ Always handle objections politely.`;
 
   const handleConfigureService = (serviceId) => {
     setConfiguringService(serviceId);
-    if (serviceId === "Outbound Sales / Appt Setting") {
+    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals") {
       const saved = onboardedClient?.serviceConfigs?.[serviceId];
       if (saved) {
-        setScriptVariant(saved.scriptVariant || "default");
+        setScriptVariant(saved.scriptVariant || (serviceId === "Reactivation & Renewals" ? "db_reactivation" : "default"));
         setScriptText(saved.scriptText || "");
         setOpeningLine(saved.openingLine || "");
         setSuccessMetric(saved.successMetric || "");
@@ -872,57 +889,107 @@ Always handle objections politely.`;
         setMaxCallLength(saved.maxCallLength || "5");
         setMaxLeadsPerRun(saved.maxLeadsPerRun || "100");
       } else if (onboardedClient?.id === "acc_Harbor") {
-        // ponytail: mock-filled demo for ONE client (Harbor) so we can see the screen fully populated.
-        setScriptVariant("appointment_setting");
-        setScriptText("You are a friendly outbound rep for Harbor Financial. Your only goal is to get a short portfolio & coverage review on the calendar — keep the pitch light, don't oversell. Confirm you're speaking with the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in.");
-        setOpeningLine("Hi, this is Harbor Financial — did I catch you at an okay moment?");
-        setSuccessMetric("A booked, qualified portfolio review on the calendar.");
-        setVoiceSelection("default");
-        setModelSelection("gpt-4o-mini");
-        setIcpDescription("Independent insurance brokers and small financial advisory firms in the US (5–50 staff) who handle their own client outreach and want more booked policy-review meetings.");
-        setIsUploadListChecked(true);
-        setIsScrapeChecked(true);
-        setScrapeCity("Austin");
-        setScrapeState("TX");
-        setScrapeRadius("25");
-        setScrapeBusinessType("Insurance brokers");
-        setClientOffer("A free 15-minute portfolio & coverage review with a licensed fiduciary advisor.");
-        setKnowledgeBase("Harbor Financial is a fee-only fiduciary advisory firm based in Austin, TX (founded 2014). Services: retirement planning, insurance, and wealth management. Known for transparent, commission-free advice. Typical client: business owners and professionals aged 35–60.");
-        setAttachedDocuments(["Harbor-Services-Overview.pdf", "FAQ-2026.docx"]);
-        setMeetingMode("Both");
-        setMeetingLink("https://meet.google.com/hbr-review-team");
-        setMeetingAddress("120 Congress Ave, Suite 400, Austin, TX 78701");
-        setAvailabilityWindows([
-          { day: "Monday", start: "09:00", end: "17:00" },
-          { day: "Wednesday", start: "10:00", end: "16:00" },
-          { day: "Friday", start: "09:00", end: "13:00" },
-        ]);
-        setMeetingLength("30");
-        setMeetingBuffer("15");
-        setBookingCapacity("20");
-        setPhoneNumbers([{ number: "+1 (512) 555-0142", cap: 40 }, { number: "+1 (512) 555-0188", cap: 40 }]);
-        setCallingHoursStart("09:00");
-        setCallingHoursEnd("18:00");
-        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
-        setMaxCallAttempts("3");
-        setRetryGapDays("3");
-        setDailyCapPerNumber("40");
-        setEnrichEnabled(true);
-        setEnrichmentDepth("Deep (profile + website + email + ICP fit)");
-        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
-        setMaxCallLength("5");
-        setMaxLeadsPerRun("100");
+        if (serviceId === "Outbound Sales / Appt Setting") {
+          setScriptVariant("appointment_setting");
+          setScriptText("You are a friendly outbound rep for Harbor Financial. Your only goal is to get a short portfolio & coverage review on the calendar — keep the pitch light, don't oversell. Confirm you're speaking with the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in.");
+          setOpeningLine("Hi, this is Harbor Financial — did I catch you at an okay moment?");
+          setSuccessMetric("A booked, qualified portfolio review on the calendar.");
+          setVoiceSelection("default");
+          setModelSelection("gpt-4o-mini");
+          setIcpDescription("Independent insurance brokers and small financial advisory firms in the US (5–50 staff) who handle their own client outreach and want more booked policy-review meetings.");
+          setIsUploadListChecked(true);
+          setIsScrapeChecked(true);
+          setScrapeCity("Austin");
+          setScrapeState("TX");
+          setScrapeRadius("25");
+          setScrapeBusinessType("Insurance brokers");
+          setClientOffer("A free 15-minute portfolio & coverage review with a licensed fiduciary advisor.");
+          setKnowledgeBase("Harbor Financial is a fee-only fiduciary advisory firm based in Austin, TX (founded 2014). Services: retirement planning, insurance, and wealth management. Known for transparent, commission-free advice. Typical client: business owners and professionals aged 35–60.");
+          setAttachedDocuments(["Harbor-Services-Overview.pdf", "FAQ-2026.docx"]);
+          setMeetingMode("Both");
+          setMeetingLink("https://meet.google.com/hbr-review-team");
+          setMeetingAddress("120 Congress Ave, Suite 400, Austin, TX 78701");
+          setAvailabilityWindows([
+            { day: "Monday", start: "09:00", end: "17:00" },
+            { day: "Wednesday", start: "10:00", end: "16:00" },
+            { day: "Friday", start: "09:00", end: "13:00" },
+          ]);
+          setMeetingLength("30");
+          setMeetingBuffer("15");
+          setBookingCapacity("20");
+          setPhoneNumbers([{ number: "+1 (512) 555-0142", cap: 40 }, { number: "+1 (512) 555-0188", cap: 40 }]);
+          setCallingHoursStart("09:00");
+          setCallingHoursEnd("18:00");
+          setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+          setMaxCallAttempts("3");
+          setRetryGapDays("3");
+          setDailyCapPerNumber("40");
+          setEnrichEnabled(true);
+          setEnrichmentDepth("Deep (profile + website + email + ICP fit)");
+          setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+          setMaxCallLength("5");
+          setMaxLeadsPerRun("100");
+        } else {
+          setScriptVariant("db_reactivation");
+          setScriptText("You are calling past or dormant leads on behalf of Harbor Financial who previously showed interest in our insurance policy reviews but went quiet. Warmly reference that they connected with us previously, check if their insurance needs are still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar for a coverage review.");
+          setOpeningLine("Hi, this is Harbor Financial — did I catch you at an okay moment?");
+          setSuccessMetric("A re-engaged meeting or renewal confirmed on the calendar.");
+          setVoiceSelection("default");
+          setModelSelection("gpt-4o-mini");
+          setIcpDescription("Past leads and dormant clients who showed interest in insurance advisory services in the US.");
+          setIsUploadListChecked(true);
+          setIsScrapeChecked(false);
+          setScrapeCity("");
+          setScrapeState("");
+          setScrapeRadius("10");
+          setScrapeBusinessType("");
+          setClientOffer("A free 15-minute portfolio & coverage review with a licensed fiduciary advisor.");
+          setKnowledgeBase("Harbor Financial is a fee-only fiduciary advisory firm based in Austin, TX (founded 2014). Services: retirement planning, insurance, and wealth management. Known for transparent, commission-free advice. Typical client: business owners and professionals aged 35–60.");
+          setAttachedDocuments(["Harbor-Services-Overview.pdf", "FAQ-2026.docx"]);
+          setMeetingMode("Both");
+          setMeetingLink("https://meet.google.com/hbr-review-team");
+          setMeetingAddress("120 Congress Ave, Suite 400, Austin, TX 78701");
+          setAvailabilityWindows([
+            { day: "Monday", start: "09:00", end: "17:00" },
+            { day: "Wednesday", start: "10:00", end: "16:00" },
+            { day: "Friday", start: "09:00", end: "13:00" },
+          ]);
+          setMeetingLength("30");
+          setMeetingBuffer("15");
+          setBookingCapacity("20");
+          setPhoneNumbers([{ number: "+1 (512) 555-0142", cap: 40 }, { number: "+1 (512) 555-0188", cap: 40 }]);
+          setCallingHoursStart("09:00");
+          setCallingHoursEnd("18:00");
+          setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+          setMaxCallAttempts("3");
+          setRetryGapDays("3");
+          setDailyCapPerNumber("40");
+          setEnrichEnabled(true);
+          setEnrichmentDepth("Standard Profile + Website");
+          setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+          setMaxCallLength("5");
+          setMaxLeadsPerRun("100");
+        }
       } else {
-        // Every other client: blank "needs input" form (only the preset-side defaults are pre-filled).
-        setScriptVariant("default");
-        setScriptText("You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in.");
-        setOpeningLine("Hi, this is the team calling — did I catch you at an okay moment?");
-        setSuccessMetric("A booked, qualified meeting on the calendar.");
+        if (serviceId === "Reactivation & Renewals") {
+          setScriptVariant("db_reactivation");
+          setScriptText("You are calling past or dormant leads on behalf of the business described in your context — people who showed interest before but went quiet. Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar. Be gracious if they've moved on.");
+          setOpeningLine("Hi, this is the team calling — did I catch you at an okay moment?");
+          setSuccessMetric("A re-engaged meeting or renewal confirmed on the calendar.");
+          setIcpDescription("");
+          setIsUploadListChecked(true);
+          setIsScrapeChecked(false);
+        } else {
+          setScriptVariant("default");
+          setScriptText("You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in.");
+          setOpeningLine("Hi, this is the team calling — did I catch you at an okay moment?");
+          setSuccessMetric("A booked, qualified meeting on the calendar.");
+          setIcpDescription("");
+          setIsUploadListChecked(true);
+          setIsScrapeChecked(false);
+        }
         setVoiceSelection("default");
         setModelSelection("gpt-4o-mini");
-        setIcpDescription("");
-        setIsUploadListChecked(true);
-        setIsScrapeChecked(false);
         setScrapeCity("");
         setScrapeState("");
         setScrapeRadius("10");
@@ -3956,7 +4023,7 @@ Always handle objections politely.`;
             )}
 
             {configuringService ? (
-              configuringService === "Outbound Sales / Appt Setting" ? (
+              (configuringService === "Outbound Sales / Appt Setting" || configuringService === "Reactivation & Renewals") ? (
                 /* Configuration Form for Outbound Sales */
                 <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
                   
@@ -4008,21 +4075,22 @@ Always handle objections politely.`;
 
                         {/* Checkboxes for Lead Source */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source (Select all that apply)</label>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source</label>
                           
                           {/* Checkbox 1: Upload a list */}
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}>
                             <input
                               type="checkbox"
+                              disabled={configuringService === "Reactivation & Renewals"}
                               checked={isUploadListChecked}
                               onChange={(e) => setIsUploadListChecked(e.target.checked)}
-                              style={{ accentColor: "#4F46FF", cursor: "pointer" }}
+                              style={{ accentColor: "#4F46FF", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}
                             />
-                            <span>Upload a list</span>
+                            <span>Upload a list (CSV file)</span>
                           </label>
 
                           {/* Checkbox 2: Scrape / find leads */}
-                          {(() => {
+                          {configuringService !== "Reactivation & Renewals" && (() => {
                             const isBusiness = onboardedClient?.targetCustomerType === "business";
                             const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
                             const isScrapeEnabled = isBusiness && hasLeadGen;
@@ -4621,19 +4689,25 @@ Always handle objections politely.`;
                             }}
                           >
                             <span>
-                              {scriptVariant === "default" && "Cold-call → book demo (Default)"}
-                              {scriptVariant === "appointment_setting" && "Lighter pitch → just fill calendar"}
+                              {configuringService === "Reactivation & Renewals" ? (
+                                (scriptVariant === "db_reactivation" || scriptVariant === "default") ? "Re-engage old leads → book (Default)" : "Expiring contracts → save/renew"
+                              ) : (
+                                scriptVariant === "default" ? "Cold-call → book demo (Default)" : "Lighter pitch → just fill calendar"
+                              )}
                             </span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVariantDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVariantDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
                               <path d="m6 9 6 6 6-6" />
                             </svg>
                           </div>
                           {isVariantDropdownOpen && (
                             <div style={{ position: "absolute", top: "100%", left: 0, marginTop: "4px", width: "320px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                              {[
+                              {(configuringService === "Reactivation & Renewals" ? [
+                                { value: "db_reactivation", label: "Re-engage old leads → book (Default)", prompt: "You are calling past or dormant leads on behalf of the business described in your context — people who showed interest before but went quiet. Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar. Be gracious if they've moved on." },
+                                { value: "renewals_winback", label: "Expiring contracts → save/renew", prompt: "You are calling customers of the business described in your context whose contract or subscription is expiring or recently lapsed. Your goal is to save the account — confirm their status, surface the value they'd lose, and handle hesitation calmly. If they want to continue, call check_availability and book_appointment to set up the renewal conversation. Never pressure; make staying easy." }
+                              ] : [
                                 { value: "default", label: "Cold-call → book demo (Default)", prompt: "You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in." },
-                                { value: "appointment_setting", label: "Lighter pitch → just fill calendar", prompt: "You are a friendly outbound rep for the business described in your context. Your only goal is to get a meeting on the calendar — keep the pitch light, don't oversell. Confirm you're speaking to the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in." }
-                              ].map((item) => (
+                                { value: "appointment_setting", label: "Lighter pitch → just fill calendar", prompt: "You are a friendly outbound rep for the business described in your context. Your only goal is to get a meeting on the calendar — keep the pitch light, don't oversell. Confirm you're speaking with the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in." }
+                              ]).map((item) => (
                                 <div
                                   key={item.value}
                                   onClick={() => {
@@ -5328,7 +5402,7 @@ Always handle objections politely.`;
                             </div>
 
                             {/* Summary Detail items */}
-                            {svcId === "Outbound Sales / Appt Setting" && config ? (
+                            {(svcId === "Outbound Sales / Appt Setting" || svcId === "Reactivation & Renewals") && config ? (
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>AI Model / Voice</span>
