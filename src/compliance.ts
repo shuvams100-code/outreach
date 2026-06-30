@@ -1,10 +1,5 @@
 import { supabase } from "./lib/supabase";
 
-// Pure helper — separated so it can be unit-tested without a DB.
-export function isBlockedPhone(phone: string, blockedSet: Set<string>): boolean {
-  return blockedSet.has(phone);
-}
-
 // Move all `enriched` leads for an account through the compliance gate:
 // - phone on opt-out list → disqualified
 // - phone clean → scrubbed (cleared to be called)
@@ -35,7 +30,7 @@ export async function scrubAccount(accountId: string): Promise<{
   let scrubbed = 0, disqualified = 0, errors = 0;
   for (const lead of leads) {
     try {
-      const newState = isBlockedPhone(lead.phone, blocked) ? "disqualified" : "scrubbed";
+      const newState = blocked.has(lead.phone) ? "disqualified" : "scrubbed";
       const { error: upErr } = await supabase
         .from("leads")
         .update({ state: newState })

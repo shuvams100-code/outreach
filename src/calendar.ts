@@ -78,40 +78,71 @@ function partsInTz(instant: Date, tz: string) {
   return { year: +get("year"), month: +get("month"), day: +get("day"), weekday: get("weekday") };
 }
 
+// A meeting can be in-person, online, or the account offers both. Availability windows can be scoped to
+// a format ("mornings in-person, afternoons online"); a slot request asks for one concrete format.
+export type MeetingFormat = "in_person" | "online" | "both";
+
+// One block of bookable hours. `days` = 0(Sun)..6(Sat), default Mon–Fri. `format` = which meeting
+// format this window serves, default "both".
+export type AvailabilityWindow = {
+  dayStartHour: number;
+  dayEndHour: number;
+  days?: number[];
+  format?: MeetingFormat;
+};
+
 export type SlotOpts = {
   from: Date;
   horizonDays: number;   // how many days ahead to search
   tz: string;            // timezone the working hours are expressed in
-  dayStartHour: number;  // e.g. 9
-  dayEndHour: number;    // e.g. 17
+  dayStartHour?: number; // back-compat single window start (e.g. 9)
+  dayEndHour?: number;   // back-compat single window end (e.g. 17)
+  windows?: AvailabilityWindow[]; // if set, overrides dayStartHour/dayEndHour
   durationMin: number;   // meeting length
   bufferMin: number;     // gap between meetings
   maxSlots: number;      // stop after this many
+  format?: MeetingFormat; // requested format; default "both" = no format filtering
 };
 
-// Open meeting slots: Mon–Fri, inside working hours (in `tz`), not overlapping a busy block,
-// and in the future. Returns ISO start times (UTC).
+const WEEKDAY_NUM: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+// Does a window offering format `w` satisfy a request for format `requested`?
+// A "both" window serves any request; a "both" request accepts any window.
+function windowServes(w: MeetingFormat, requested: MeetingFormat): boolean {
+  return requested === "both" || w === "both" || w === requested;
+}
+
+// Open meeting slots: inside the availability windows (in `tz`), not overlapping a busy block, in the
+// future, and — if a format is requested — only from windows that serve that format. Busy blocks are
+// NEVER filtered by format: one person can't take an online and an in-person meeting at the same time,
+// so any booking blocks the slot for both. Returns ISO start times (UTC), chronological, deduped.
 export function computeFreeSlots(busy: BusyBlock[], o: SlotOpts): string[] {
   const busyR = busy.map((b) => [Date.parse(b.start), Date.parse(b.end)] as const);
   const step = o.durationMin + o.bufferMin;
+  const requested = o.format ?? "both";
+  const windows: AvailabilityWindow[] = (o.windows && o.windows.length)
+    ? o.windows
+    : [{ dayStartHour: o.dayStartHour ?? 9, dayEndHour: o.dayEndHour ?? 17, days: [1, 2, 3, 4, 5], format: "both" }];
   const out: string[] = [];
 
-  for (let d = 0; d < o.horizonDays && out.length < o.maxSlots; d++) {
+  for (let d = 0; d < o.horizonDays; d++) {
     const { year, month, day, weekday } = partsInTz(new Date(o.from.getTime() + d * 86_400_000), o.tz);
-    if (weekday === "Sat" || weekday === "Sun") continue;
-
-    for (let min = o.dayStartHour * 60; min + o.durationMin <= o.dayEndHour * 60; min += step) {
-      const start = wallTimeToUtc(year, month, day, Math.floor(min / 60), min % 60, o.tz);
-      if (start.getTime() <= o.from.getTime()) continue; // future only
-      const end = new Date(start.getTime() + o.durationMin * 60_000);
-      const clash = busyR.some(([bs, be]) => start.getTime() < be && end.getTime() > bs);
-      if (!clash) {
-        out.push(start.toISOString());
-        if (out.length >= o.maxSlots) break;
+    const dow = WEEKDAY_NUM[weekday] ?? -1;
+    for (const w of windows) {
+      const days = w.days ?? [1, 2, 3, 4, 5];
+      if (!days.includes(dow)) continue;
+      if (!windowServes(w.format ?? "both", requested)) continue;
+      for (let min = w.dayStartHour * 60; min + o.durationMin <= w.dayEndHour * 60; min += step) {
+        const start = wallTimeToUtc(year, month, day, Math.floor(min / 60), min % 60, o.tz);
+        if (start.getTime() <= o.from.getTime()) continue; // future only
+        const end = new Date(start.getTime() + o.durationMin * 60_000);
+        const clash = busyR.some(([bs, be]) => start.getTime() < be && end.getTime() > bs);
+        if (!clash) out.push(start.toISOString());
       }
     }
   }
-  return out;
+  // Windows can overlap or be listed out of order → dedupe and sort (UTC ISO sorts chronologically).
+  return [...new Set(out)].sort().slice(0, o.maxSlots);
 }
 
 // ---------- write an event ----------

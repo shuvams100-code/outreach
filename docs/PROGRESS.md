@@ -16,6 +16,15 @@ live mid-call booking tools + server, inbound answering, Slack alert, reminder-c
 agent context, per-account ICP. What stands between here and revenue is **deploy + go-live + the
 expansion tools** — see the pending list below.
 
+## Booking reworked — own calendar, no per-client OAuth (2026-06-30)
+
+The booking layer was rebuilt around the locked decisions in `build-plan.md` §4E:
+- **`booking.ts` de-Googled** — our own DB (availability windows + `bookings`) is the source of truth; Google sync is best-effort and never required (no more "no calendar = error").
+- **Format-aware slots** — `computeFreeSlots` supports format-scoped windows + the shared-time rule (any booking blocks the slot for both formats). `check_availability`/`book_appointment` take a `meeting_format`; bookings store the chosen format.
+- **Meeting mode** (`in_person`/`online`/`both`) drives the agent: `meetingModeInstruction` is injected into the live prompt so it only ever offers what the client does; asks "in-person or video?" only in "both".
+- **Email + `.ics` confirmations** — `notify.ts` `notifyBookingEmails` emails client + customer with the join link/address in the body and an `.ics` attached; self-skips until `RESEND_API_KEY`/`EMAIL_FROM` are set.
+- Config lives in the account `booking` jsonb (`meeting_mode`, `address`, `windows`) — no migration. Tests green (now 62 checks). **Still to wire:** Step-2 UI to set these, and inbound customer-email capture.
+
 ---
 
 ## 🛠️ Robustness fixes (code review, 2026-06-26)

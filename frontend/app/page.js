@@ -7,13 +7,16 @@ const INITIAL_CLIENTS = [
   {
     id: "acc_Harbor",
     name: "Harbor Financial",
+    industry: "Financial Services",
     email: "contact@harborfin.com",
     contact: "+1 (555) 120-3456",
+    contactName: "Marcus Reid",
+    contactPhone: "+1 (555) 120-3456",
     timezone: "America/New_York",
     avatar: "HF",
     color: "#0F172A",
     leads: "210 Ready Leads",
-    services: ["Do Everything (Full Funnel)"],
+    services: ["Do Everything (Full Funnel)", "Lead Generation"],
     health: "Operational",
     retainer: "$5,000.00",
     payment: "Paid",
@@ -198,11 +201,32 @@ const TIMEFRAME_DATA = {
   }
 };
 
+const TIMEZONE_GROUPS = [
+  { label: "North America", zones: [
+    { value: "America/New_York", label: "Eastern Time (ET)" },
+    { value: "America/Chicago", label: "Central Time (CT)" },
+    { value: "America/Denver", label: "Mountain Time (MT)" },
+    { value: "America/Phoenix", label: "Mountain Standard Time (Phoenix)" },
+    { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
+  ]},
+  { label: "Europe & GMT", zones: [
+    { value: "Europe/London", label: "London / GMT" },
+    { value: "Europe/Paris", label: "Paris / CET" },
+  ]},
+  { label: "Asia & Pacific", zones: [
+    { value: "Asia/Kolkata", label: "Kolkata / IST" },
+    { value: "Asia/Tokyo", label: "Tokyo / JST" },
+    { value: "Australia/Sydney", label: "Sydney / AEDT" },
+  ]},
+  { label: "Other", zones: [
+    { value: "UTC", label: "Coordinated Universal Time (UTC)" },
+  ]},
+];
+const TIMEZONE_LABEL = (v) => TIMEZONE_GROUPS.flatMap(g => g.zones).find(z => z.value === v)?.label ?? "Select timezone";
+
 const SERVICE_SUB_OPTIONS = {
   "Answer My Phones": [
-    "Receptionist (business hours)",
-    "After-Hours / Overflow",
-    "24/7 Coverage",
+    "Receptionist",
     "Support Line"
   ],
   "Call Leads & Book": [
@@ -286,18 +310,165 @@ const generateMockPayments = () => {
   return data;
 };
 
+// Account status derives from the enable toggle + whether any service is live.
+// ponytail: `enabled` and active-service count are mock fields today; persist via the accounts table later.
+function clientStatus(c) {
+  if (c?.enabled === false) return { label: "Disabled", color: "#EF4444", bg: "#FEF2F2" };
+  const hasActiveService = (c?.activeServices?.length ?? 0) > 0;
+  return hasActiveService
+    ? { label: "Active", color: "#10B981", bg: "#ECFDF5" }
+    : { label: "Onboarded", color: "#64748B", bg: "#F1F5F9" };
+}
+
+// Client name + avatar + score/onboarded line — the identical first cell of the dashboard and
+// directory client tables.
+function ClientIdentityCell({ client }) {
+  return (
+    <td style={{ padding: "12px 10px", display: "flex", alignItems: "center", gap: "10px" }}>
+      <span style={{ width: "28px", height: "28px", borderRadius: "50%", background: client.color, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 600, flexShrink: 0 }}>
+        {client.avatar}
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <span style={{ fontSize: "12px", fontWeight: 600, color: "#1F2433", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {client.name}
+        </span>
+        <span style={{ fontSize: "9px", color: "#8A90A0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          Score: {client.score}% • Onboarded {new Date(client.onboarded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
+      </div>
+    </td>
+  );
+}
+
+// Timeframe selector used on both the dashboard "Overall Sales" and revenue "Revenue & Cost" cards.
+// Caller owns the value/open state + the ref (so the existing outside-click handler keeps working).
+function TimeframeDropdown({ value, onChange, open, setOpen, triggerRef }) {
+  return (
+    <div ref={triggerRef} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", padding: "6px 12px", fontSize: "11px", fontWeight: 500, color: "#5A6072", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontFamily: "inherit", transition: "all 150ms ease" }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4F46FF"; e.currentTarget.style.color = "#1F2433"; }}
+        onMouseLeave={(e) => { if (!open) { e.currentTarget.style.borderColor = "#ECEEF2"; e.currentTarget.style.color = "#5A6072"; } }}
+      >
+        {TIMEFRAME_DATA[value].label}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "10px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", padding: "4px", zIndex: 50, minWidth: "130px", display: "flex", flexDirection: "column", gap: "2px" }}>
+          {Object.entries(TIMEFRAME_DATA).map(([key, data]) => (
+            <div
+              key={key}
+              onClick={() => { onChange(key); setOpen(false); }}
+              style={{ padding: "6px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: value === key ? "#4F46FF" : "#5A6072", background: value === key ? "#F4F5FF" : "transparent", fontWeight: value === key ? 600 : 500, transition: "all 150ms ease" }}
+              onMouseEnter={(e) => { if (value !== key) e.currentTarget.style.background = "#F7F8FA"; }}
+              onMouseLeave={(e) => { if (value !== key) e.currentTarget.style.background = "transparent"; }}
+            >
+              {data.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const [clients, setClients] = useState(INITIAL_CLIENTS);
   
   // Onboard New Organization Form State
   const [orgName, setOrgName] = useState("");
+  const [orgIndustry, setOrgIndustry] = useState("");
   const [contactName, setContactName] = useState("");
   const [orgEmail, setOrgEmail] = useState("");
   const [orgPhone, setOrgPhone] = useState("");
   const [orgTimezone, setOrgTimezone] = useState("America/New_York");
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const timezoneRef = useRef(null);
   const [onboardErrors, setOnboardErrors] = useState({});
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [onboardSuccessMessage, setOnboardSuccessMessage] = useState("");
+  const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [onboardedClient, setOnboardedClient] = useState(null);
+  const [editingClientId, setEditingClientId] = useState(null); // null = onboarding new; else editing this client
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [selectedServiceCategory, setSelectedServiceCategory] = useState("");
+  const [modalStep, setModalStep] = useState(1);
+  const [selectedSubService, setSelectedSubService] = useState("");
+
+  const [configuringService, setConfiguringService] = useState(null);
+  
+  // Section 1: Agent & Script states
+  const [scriptVariant, setScriptVariant] = useState("default");
+  const [isVariantDropdownOpen, setIsVariantDropdownOpen] = useState(false);
+  const [scriptText, setScriptText] = useState("");
+  const [openingLine, setOpeningLine] = useState("");
+  const [successMetric, setSuccessMetric] = useState("");
+  const [voiceSelection, setVoiceSelection] = useState("default");
+  const [isVoiceDropdownOpen, setIsVoiceDropdownOpen] = useState(false);
+  const [modelSelection, setModelSelection] = useState("gpt-4o-mini");
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false);
+  const variantRef = useRef(null);
+  const voiceRef = useRef(null);
+  const modelRef = useRef(null);
+  const depthRef = useRef(null);
+
+  // Section 3: Who it calls
+  const [icpDescription, setIcpDescription] = useState("");
+  const [isUploadListChecked, setIsUploadListChecked] = useState(true);
+  const [isScrapeChecked, setIsScrapeChecked] = useState(false);
+  const [scrapeCity, setScrapeCity] = useState("");
+  const [scrapeState, setScrapeState] = useState("");
+  const [scrapeRadius, setScrapeRadius] = useState("10");
+  const [scrapeBusinessType, setScrapeBusinessType] = useState("");
+  
+  // Section 4: Offer & Knowledge
+  const [clientOffer, setClientOffer] = useState("");
+  const [knowledgeBase, setKnowledgeBase] = useState("");
+  const [attachedDocuments, setAttachedDocuments] = useState([]);
+
+  // Section 5: The meeting
+  const [meetingMode, setMeetingMode] = useState(""); // 'Online', 'In-person', 'Both', ''
+  const [meetingLink, setMeetingLink] = useState("");
+  const [meetingAddress, setMeetingAddress] = useState("");
+  const [availabilityWindows, setAvailabilityWindows] = useState([
+    { day: "Monday", start: "09:00", end: "17:00" }
+  ]);
+  const [meetingLength, setMeetingLength] = useState("30");
+  const [meetingBuffer, setMeetingBuffer] = useState("15");
+  const [bookingCapacity, setBookingCapacity] = useState("20");
+
+  // Section 6: Phone line & numbers
+  const [phoneNumbers, setPhoneNumbers] = useState([
+    { number: "", cap: 40 }
+  ]);
+  const [callingHoursStart, setCallingHoursStart] = useState("09:00");
+  const [callingHoursEnd, setCallingHoursEnd] = useState("18:00");
+  const [callingTimezone, setCallingTimezone] = useState("America/New_York");
+  const [isTimezoneDropdownOpen, setIsTimezoneDropdownOpen] = useState(false);
+
+  // Surfaced Auto-Config Collapse States
+  const [isRetryPacingCollapsed, setIsRetryPacingCollapsed] = useState(true);
+  const [isVoicemailCollapsed, setIsVoicemailCollapsed] = useState(true);
+  const [isComplianceCollapsed, setIsComplianceCollapsed] = useState(true);
+  const [isEnrichmentCollapsed, setIsEnrichmentCollapsed] = useState(true);
+  const [isScrapeSourcesCollapsed, setIsScrapeSourcesCollapsed] = useState(true);
+  const [isCallLimitsCollapsed, setIsCallLimitsCollapsed] = useState(true);
+  // Advanced auto-config values (preset defaults, editable). No voicemail field — we never leave one.
+  const [maxCallAttempts, setMaxCallAttempts] = useState("3");
+  const [retryGapDays, setRetryGapDays] = useState("3");
+  const [dailyCapPerNumber, setDailyCapPerNumber] = useState("40");
+  const [enrichEnabled, setEnrichEnabled] = useState(true);
+  const [enrichmentDepth, setEnrichmentDepth] = useState("Standard Profile + Website");
+  const [scrapeSources, setScrapeSources] = useState(["Google Maps", "Yellow Pages", "Hotfrog"]);
+  const [maxCallLength, setMaxCallLength] = useState("5");
+  const [maxLeadsPerRun, setMaxLeadsPerRun] = useState("100");
 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -338,6 +509,11 @@ export default function Home() {
       if (revenueTimeframeRef.current && !revenueTimeframeRef.current.contains(e.target)) setShowRevenueTimeframeDropdown(false);
       if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) setActiveFilterColumn(null);
       if (paymentClientRef.current && !paymentClientRef.current.contains(e.target)) setPaymentClientOpen(false);
+      if (timezoneRef.current && !timezoneRef.current.contains(e.target)) setTimezoneOpen(false);
+      if (variantRef.current && !variantRef.current.contains(e.target)) setIsVariantDropdownOpen(false);
+      if (voiceRef.current && !voiceRef.current.contains(e.target)) setIsVoiceDropdownOpen(false);
+      if (modelRef.current && !modelRef.current.contains(e.target)) setIsModelDropdownOpen(false);
+      if (depthRef.current && !depthRef.current.contains(e.target)) setIsDepthDropdownOpen(false);
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -582,6 +758,221 @@ export default function Home() {
     }, 1200);
   };
 
+  // Enable/disable the whole client account (e.g. flip off on non-payment). Status follows from it.
+  const toggleClientEnabled = () => {
+    const c = onboardedClient;
+    if (!c) return;
+    const next = c.enabled === false; // currently disabled → enable; else disable
+    setClients(prev => prev.map(x => x.id === c.id ? { ...x, enabled: next } : x));
+    setOnboardedClient(prev => prev ? { ...prev, enabled: next } : prev);
+  };
+
+  // Open the onboarding popup pre-filled with the current client, in edit mode.
+  const startEditOnboarding = () => {
+    const c = onboardedClient;
+    if (!c) return;
+    setOrgName(c.name || "");
+    setOrgIndustry(c.industry || "");
+    setContactName(c.contactName || "");
+    setOrgEmail(c.email || "");
+    setOrgPhone(c.contactPhone || c.contact || "");
+    setOrgTimezone(c.timezone || "America/New_York");
+    setOnboardErrors({});
+    setEditingClientId(c.id);
+    setShowOnboardModal(true);
+  };
+
+  const handleGenerateScript = () => {
+    const modeText = meetingMode ? `via ${meetingMode} mode` : "";
+    const offerText = clientOffer ? `the offer: "${clientOffer}"` : "our services";
+    const icpText = icpDescription ? `targeting: ${icpDescription}` : "our target audience";
+    
+    const generated = `You are a warm, sharp, persuasive outbound sales rep calling on behalf of the business.
+Your primary goal is to pitch ${offerText} to prospects ${icpText}.
+Speak naturally, asking one question at a time. Qualify the prospect lightly.
+When they express interest in booking a demo/meeting ${modeText}, check calendar availability and book the slot.
+Always handle objections politely.`;
+    
+    setScriptText(generated);
+  };
+
+  const handleActivateService = () => {
+    if (!meetingMode) return; // required check
+    const c = onboardedClient;
+    if (!c) return;
+
+    const active = c.activeServices || [];
+    const updatedActive = active.includes(configuringService) ? active : [...active, configuringService];
+    // Clone, don't mutate the existing state object.
+    const serviceConfigs = { ...(c.serviceConfigs || {}) };
+    serviceConfigs[configuringService] = {
+      scriptVariant, scriptText, openingLine, successMetric, voiceSelection, modelSelection,
+      icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
+      clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
+      meetingLength, meetingBuffer, bookingCapacity,
+      phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
+      callingHoursStart, callingHoursEnd, callingTimezone,
+      maxCallAttempts, retryGapDays, dailyCapPerNumber,
+      enrichEnabled, enrichmentDepth, scrapeSources,
+      maxCallLength, maxLeadsPerRun
+    };
+
+    const updated = {
+      ...c,
+      activeServices: updatedActive,
+      services: Array.from(new Set([...(c.services || []), configuringService])),
+      serviceConfigs
+    };
+    setClients(prev => prev.map(x => x.id === c.id ? updated : x));
+    setOnboardedClient(updated);
+    setConfiguringService(null);
+  };
+
+  const handleConfigureService = (serviceId) => {
+    setConfiguringService(serviceId);
+    if (serviceId === "Outbound Sales / Appt Setting") {
+      const saved = onboardedClient?.serviceConfigs?.[serviceId];
+      if (saved) {
+        setScriptVariant(saved.scriptVariant || "default");
+        setScriptText(saved.scriptText || "");
+        setOpeningLine(saved.openingLine || "");
+        setSuccessMetric(saved.successMetric || "");
+        setVoiceSelection(saved.voiceSelection || "default");
+        setModelSelection(saved.modelSelection || "gpt-4o-mini");
+        setIcpDescription(saved.icpDescription || "");
+        setIsUploadListChecked(saved.isUploadListChecked !== undefined ? saved.isUploadListChecked : true);
+        setIsScrapeChecked(saved.isScrapeChecked !== undefined ? saved.isScrapeChecked : false);
+        setScrapeCity(saved.scrapeCity || "");
+        setScrapeState(saved.scrapeState || "");
+        setScrapeRadius(saved.scrapeRadius || "10");
+        setScrapeBusinessType(saved.scrapeBusinessType || "");
+        setClientOffer(saved.clientOffer || "");
+        setKnowledgeBase(saved.knowledgeBase || "");
+        setAttachedDocuments(saved.attachedDocuments || []);
+        setMeetingMode(saved.meetingMode || "");
+        setMeetingLink(saved.meetingLink || "");
+        setMeetingAddress(saved.meetingAddress || "");
+        setAvailabilityWindows(saved.availabilityWindows || [{ day: "Monday", start: "09:00", end: "17:00" }]);
+        setMeetingLength(saved.meetingLength || "30");
+        setMeetingBuffer(saved.meetingBuffer || "15");
+        setBookingCapacity(saved.bookingCapacity || "20");
+        setPhoneNumbers(saved.phoneNumbers?.length ? saved.phoneNumbers : [{ number: "", cap: 40 }]);
+        setCallingHoursStart(saved.callingHoursStart || "09:00");
+        setCallingHoursEnd(saved.callingHoursEnd || "18:00");
+        setCallingTimezone(saved.callingTimezone || onboardedClient?.timezone || "America/New_York");
+        setMaxCallAttempts(saved.maxCallAttempts || "3");
+        setRetryGapDays(saved.retryGapDays || "3");
+        setDailyCapPerNumber(saved.dailyCapPerNumber || "40");
+        setEnrichEnabled(saved.enrichEnabled !== undefined ? saved.enrichEnabled : true);
+        setEnrichmentDepth(saved.enrichmentDepth || "Standard Profile + Website");
+        setScrapeSources(saved.scrapeSources || ["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxCallLength(saved.maxCallLength || "5");
+        setMaxLeadsPerRun(saved.maxLeadsPerRun || "100");
+      } else if (onboardedClient?.id === "acc_Harbor") {
+        // ponytail: mock-filled demo for ONE client (Harbor) so we can see the screen fully populated.
+        setScriptVariant("appointment_setting");
+        setScriptText("You are a friendly outbound rep for Harbor Financial. Your only goal is to get a short portfolio & coverage review on the calendar — keep the pitch light, don't oversell. Confirm you're speaking with the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in.");
+        setOpeningLine("Hi, this is Harbor Financial — did I catch you at an okay moment?");
+        setSuccessMetric("A booked, qualified portfolio review on the calendar.");
+        setVoiceSelection("default");
+        setModelSelection("gpt-4o-mini");
+        setIcpDescription("Independent insurance brokers and small financial advisory firms in the US (5–50 staff) who handle their own client outreach and want more booked policy-review meetings.");
+        setIsUploadListChecked(true);
+        setIsScrapeChecked(true);
+        setScrapeCity("Austin");
+        setScrapeState("TX");
+        setScrapeRadius("25");
+        setScrapeBusinessType("Insurance brokers");
+        setClientOffer("A free 15-minute portfolio & coverage review with a licensed fiduciary advisor.");
+        setKnowledgeBase("Harbor Financial is a fee-only fiduciary advisory firm based in Austin, TX (founded 2014). Services: retirement planning, insurance, and wealth management. Known for transparent, commission-free advice. Typical client: business owners and professionals aged 35–60.");
+        setAttachedDocuments(["Harbor-Services-Overview.pdf", "FAQ-2026.docx"]);
+        setMeetingMode("Both");
+        setMeetingLink("https://meet.google.com/hbr-review-team");
+        setMeetingAddress("120 Congress Ave, Suite 400, Austin, TX 78701");
+        setAvailabilityWindows([
+          { day: "Monday", start: "09:00", end: "17:00" },
+          { day: "Wednesday", start: "10:00", end: "16:00" },
+          { day: "Friday", start: "09:00", end: "13:00" },
+        ]);
+        setMeetingLength("30");
+        setMeetingBuffer("15");
+        setBookingCapacity("20");
+        setPhoneNumbers([{ number: "+1 (512) 555-0142", cap: 40 }, { number: "+1 (512) 555-0188", cap: 40 }]);
+        setCallingHoursStart("09:00");
+        setCallingHoursEnd("18:00");
+        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+        setMaxCallAttempts("3");
+        setRetryGapDays("3");
+        setDailyCapPerNumber("40");
+        setEnrichEnabled(true);
+        setEnrichmentDepth("Deep (profile + website + email + ICP fit)");
+        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxCallLength("5");
+        setMaxLeadsPerRun("100");
+      } else {
+        // Every other client: blank "needs input" form (only the preset-side defaults are pre-filled).
+        setScriptVariant("default");
+        setScriptText("You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in.");
+        setOpeningLine("Hi, this is the team calling — did I catch you at an okay moment?");
+        setSuccessMetric("A booked, qualified meeting on the calendar.");
+        setVoiceSelection("default");
+        setModelSelection("gpt-4o-mini");
+        setIcpDescription("");
+        setIsUploadListChecked(true);
+        setIsScrapeChecked(false);
+        setScrapeCity("");
+        setScrapeState("");
+        setScrapeRadius("10");
+        setScrapeBusinessType("");
+        setClientOffer("");
+        setKnowledgeBase("");
+        setAttachedDocuments([]);
+        setMeetingMode("");
+        setMeetingLink("");
+        setMeetingAddress("");
+        setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
+        setMeetingLength("30");
+        setMeetingBuffer("15");
+        setBookingCapacity("20");
+        setPhoneNumbers([{ number: "", cap: 40 }]);
+        setCallingHoursStart("09:00");
+        setCallingHoursEnd("18:00");
+        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+        setMaxCallAttempts("3");
+        setRetryGapDays("3");
+        setDailyCapPerNumber("40");
+        setEnrichEnabled(true);
+        setEnrichmentDepth("Standard Profile + Website");
+        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxCallLength("5");
+        setMaxLeadsPerRun("100");
+      }
+    }
+  };
+
+  const handleDeactivateService = (serviceId) => {
+    const c = onboardedClient;
+    if (!c) return;
+    const updated = { ...c, activeServices: (c.activeServices || []).filter(s => s !== serviceId) };
+    setClients(prev => prev.map(x => x.id === c.id ? updated : x));
+    setOnboardedClient(updated);
+  };
+
+  const handleDeleteService = (serviceId) => {
+    const c = onboardedClient;
+    if (!c) return;
+    const serviceConfigs = { ...(c.serviceConfigs || {}) };
+    delete serviceConfigs[serviceId];
+    const updated = {
+      ...c,
+      services: (c.services || []).filter(s => s !== serviceId),
+      activeServices: (c.activeServices || []).filter(s => s !== serviceId),
+      serviceConfigs
+    };
+    setClients(prev => prev.map(x => x.id === c.id ? updated : x));
+    setOnboardedClient(updated);
+  };
+
   const handleOnboardSubmit = (e) => {
     e.preventDefault();
     const errs = {};
@@ -610,7 +1001,28 @@ export default function Home() {
     setTimeout(() => {
       const words = orgName.trim().split(/\s+/);
       const avatar = words.map(w => w[0]).join("").substring(0, 2).toUpperCase() || "OR";
-      
+
+      // Edit mode: patch the existing client in place (keep id/color/score/billing), stay on this page.
+      if (editingClientId) {
+        const patch = {
+          name: orgName.trim(),
+          industry: orgIndustry.trim(),
+          email: orgEmail.trim(),
+          contact: `${contactName.trim()} (${orgPhone.trim()})`,
+          contactName: contactName.trim(),
+          contactPhone: orgPhone.trim(),
+          timezone: orgTimezone,
+          avatar,
+        };
+        setClients(prev => prev.map(c => c.id === editingClientId ? { ...c, ...patch } : c));
+        setOnboardedClient(prev => prev ? { ...prev, ...patch } : prev);
+        setOrgName(""); setOrgIndustry(""); setContactName(""); setOrgEmail(""); setOrgPhone(""); setOrgTimezone("America/New_York");
+        setIsOnboarding(false);
+        setShowOnboardModal(false);   // just close — details are already updated
+        setEditingClientId(null);
+        return;
+      }
+
       const colors = ["#4F46FF", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#6366F1", "#14B8A6"];
       const randomColor = colors[Math.floor(Math.random() * colors.length)];
       
@@ -619,6 +1031,7 @@ export default function Home() {
       const newClient = {
         id: newId,
         name: orgName.trim(),
+        industry: orgIndustry.trim(),
         email: orgEmail.trim(),
         contact: `${contactName.trim()} (${orgPhone.trim()})`,
         contactName: contactName.trim(),
@@ -636,7 +1049,8 @@ export default function Home() {
       };
 
       setClients(prev => [...prev, newClient]);
-      
+      setOnboardedClient(newClient);
+
       const timestamp = new Date().toLocaleTimeString();
       setTerminalLogs(prev => [
         `[${timestamp}] SUCCESS: Onboarded organization "${orgName.trim()}" (Contact: ${contactName.trim()}, TZ: ${orgTimezone})`,
@@ -645,8 +1059,9 @@ export default function Home() {
 
       setIsOnboarding(false);
       setOnboardSuccessMessage(`Successfully onboarded ${orgName.trim()}!`);
-      
+
       setOrgName("");
+      setOrgIndustry("");
       setContactName("");
       setOrgEmail("");
       setOrgPhone("");
@@ -654,7 +1069,8 @@ export default function Home() {
 
       setTimeout(() => {
         setOnboardSuccessMessage("");
-        setCurrentView("dashboard");
+        setShowOnboardModal(false);
+        setCurrentView("create-service");
       }, 1500);
       
     }, 1200);
@@ -832,11 +1248,11 @@ export default function Home() {
         {/* Top bar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginBottom: "20px" }}>
           <div style={{ flexShrink: 0 }}>
-            <div style={{ fontSize: "20px", fontWeight: 600, color: "#1F2433" }}>
-              {currentView === "dashboard" ? "Overview" : currentView === "health" ? "System Health" : currentView === "revenue" ? "Revenue & Payments" : currentView === "directory" ? "Client Directory" : "Onboard Organization"}
+            <div style={{ fontSize: "20px", fontWeight: 600, color: (currentView === "add-organization" || currentView === "create-service") ? "#4F46FF" : "#1F2433" }}>
+              {currentView === "dashboard" ? "Overview" : currentView === "health" ? "System Health" : currentView === "revenue" ? "Revenue & Payments" : currentView === "directory" ? "Client Directory" : currentView === "create-service" ? "Create Service" : "Onboard Organization"}
             </div>
             <div style={{ fontSize: "12px", color: "#8A90A0", marginTop: "2px" }}>
-              {currentView === "dashboard" ? "Agency dashboard" : currentView === "health" ? "Real-time operational status" : currentView === "revenue" ? "Billing logs and revenue metrics" : currentView === "directory" ? "Full client roster and search" : "Register a new client organization on the Reacher AI calling platform"}
+              {currentView === "dashboard" ? "Agency dashboard" : currentView === "health" ? "Real-time operational status" : currentView === "revenue" ? "Billing logs and revenue metrics" : currentView === "directory" ? "Full client roster and search" : currentView === "create-service" ? "Choose the service this client's AI agent will run" : "Register a new client organization on the Reacher AI calling platform"}
             </div>
           </div>
 
@@ -884,7 +1300,8 @@ export default function Home() {
           )}
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-            {/* Notification Bell Button */}
+            {/* Notification Bell Button — hidden on the service-setup page */}
+            {currentView !== "create-service" && (
             <div
               onClick={() => setCurrentView(currentView === "health" ? "dashboard" : "health")}
               title="System Health Alerts"
@@ -930,24 +1347,16 @@ export default function Home() {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
+            )}
 
-            {currentView !== "add-organization" ? (
-              <button 
-                onClick={() => setCurrentView("add-organization")}
+            {currentView !== "create-service" && (
+              <button
+                onClick={() => setShowOnboardModal(true)}
                 style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background 150ms ease" }}
                 onMouseEnter={(e) => e.currentTarget.style.background = "#3F37D9"}
                 onMouseLeave={(e) => e.currentTarget.style.background = "#4F46FF"}
               >
                 Add Organization
-              </button>
-            ) : (
-              <button 
-                onClick={() => setCurrentView("dashboard")}
-                style={{ background: "#FFFFFF", color: "#4F46FF", border: "1px solid #4F46FF", borderRadius: "10px", padding: "8px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all 150ms ease" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F5FF"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
-              >
-                Back to Dashboard
               </button>
             )}
           </div>
@@ -1056,90 +1465,7 @@ export default function Home() {
                         <span style={{ fontSize: "14px", fontWeight: 600, color: "#1F2433" }}>Overall Sales</span>
                         
                         {/* Timeframe selector button */}
-                        <div ref={timeframeRef} style={{ position: "relative" }}>
-                          <button
-                            onClick={() => setShowTimeframeDropdown(!showTimeframeDropdown)}
-                            style={{
-                              background: "#FFFFFF",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              padding: "6px 12px",
-                              fontSize: "11px",
-                              fontWeight: 500,
-                              color: "#5A6072",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              fontFamily: "inherit",
-                              transition: "all 150ms ease"
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = "#4F46FF";
-                              e.currentTarget.style.color = "#1F2433";
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!showTimeframeDropdown) {
-                                e.currentTarget.style.borderColor = "#ECEEF2";
-                                e.currentTarget.style.color = "#5A6072";
-                              }
-                            }}
-                          >
-                            {TIMEFRAME_DATA[timeframe].label}
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                              <line x1="16" y1="2" x2="16" y2="6" />
-                              <line x1="8" y1="2" x2="8" y2="6" />
-                              <line x1="3" y1="10" x2="21" y2="10" />
-                            </svg>
-                          </button>
-                          
-                          {showTimeframeDropdown && (
-                            <div style={{
-                              position: "absolute",
-                              top: "calc(100% + 6px)",
-                              right: 0,
-                              background: "#FFFFFF",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "10px",
-                              boxShadow: "0 8px 24px rgba(31,36,51,0.08)",
-                              padding: "4px",
-                              zIndex: 50,
-                              minWidth: "130px",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "2px"
-                            }}>
-                              {Object.entries(TIMEFRAME_DATA).map(([key, data]) => (
-                                <div
-                                  key={key}
-                                  onClick={() => {
-                                    setTimeframe(key);
-                                    setShowTimeframeDropdown(false);
-                                  }}
-                                  style={{
-                                    padding: "6px 10px",
-                                    fontSize: "12px",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    color: timeframe === key ? "#4F46FF" : "#5A6072",
-                                    backgroundColor: timeframe === key ? "#F4F5FF" : "transparent",
-                                    fontWeight: timeframe === key ? 600 : 500,
-                                    transition: "all 150ms ease"
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (timeframe !== key) e.currentTarget.style.backgroundColor = "#F7F8FA";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (timeframe !== key) e.currentTarget.style.backgroundColor = "transparent";
-                                  }}
-                                >
-                                  {data.label}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <TimeframeDropdown value={timeframe} onChange={setTimeframe} open={showTimeframeDropdown} setOpen={setShowTimeframeDropdown} triggerRef={timeframeRef} />
                       </div>
 
                       {/* Stats & Legend Row */}
@@ -1715,31 +2041,7 @@ export default function Home() {
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                         >
                           {/* Client Name with Avatar */}
-                          <td style={{ padding: "12px 10px", display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "50%",
-                              background: client.color,
-                              color: "#FFFFFF",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              flexShrink: 0
-                            }}>
-                              {client.avatar}
-                            </span>
-                            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                              <span style={{ fontSize: "12px", fontWeight: 600, color: "#1F2433", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {client.name}
-                              </span>
-                              <span style={{ fontSize: "9px", color: "#8A90A0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                Score: {client.score}% • Onboarded {new Date(client.onboarded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
-                            </div>
-                          </td>
+                          <ClientIdentityCell client={client} />
 
                           {/* Account ID */}
                           <td style={{ padding: "12px 10px", fontSize: "11px", color: "#5A6072", fontFamily: "monospace" }}>
@@ -2095,90 +2397,7 @@ export default function Home() {
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#1F2433" }}>Revenue & Cost Performance</span>
                       
                       {/* Timeframe selector button */}
-                      <div ref={revenueTimeframeRef} style={{ position: "relative" }}>
-                        <button
-                          onClick={() => setShowRevenueTimeframeDropdown(!showRevenueTimeframeDropdown)}
-                          style={{
-                            background: "#FFFFFF",
-                            border: "1px solid #ECEEF2",
-                            borderRadius: "8px",
-                            padding: "6px 12px",
-                            fontSize: "11px",
-                            fontWeight: 500,
-                            color: "#5A6072",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontFamily: "inherit",
-                            transition: "all 150ms ease"
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "#4F46FF";
-                            e.currentTarget.style.color = "#1F2433";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!showRevenueTimeframeDropdown) {
-                              e.currentTarget.style.borderColor = "#ECEEF2";
-                              e.currentTarget.style.color = "#5A6072";
-                            }
-                          }}
-                        >
-                          {TIMEFRAME_DATA[revenueTimeframe].label}
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                          </svg>
-                        </button>
-                        
-                        {showRevenueTimeframeDropdown && (
-                          <div style={{
-                            position: "absolute",
-                            top: "calc(100% + 6px)",
-                            right: 0,
-                            background: "#FFFFFF",
-                            border: "1px solid #ECEEF2",
-                            borderRadius: "10px",
-                            boxShadow: "0 8px 24px rgba(31,36,51,0.08)",
-                            padding: "4px",
-                            zIndex: 50,
-                            minWidth: "130px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "2px"
-                          }}>
-                            {Object.entries(TIMEFRAME_DATA).map(([key, data]) => (
-                              <div
-                                key={key}
-                                onClick={() => {
-                                  setRevenueTimeframe(key);
-                                  setShowRevenueTimeframeDropdown(false);
-                                }}
-                                style={{
-                                  padding: "6px 10px",
-                                  fontSize: "11px",
-                                  fontWeight: 500,
-                                  color: revenueTimeframe === key ? "#4F46FF" : "#5A6072",
-                                  borderRadius: "6px",
-                                  cursor: "pointer",
-                                  background: revenueTimeframe === key ? "#F4F5FF" : "transparent",
-                                  transition: "all 150ms ease"
-                                }}
-                                onMouseEnter={(e) => {
-                                  if (revenueTimeframe !== key) e.currentTarget.style.background = "#F7F8FA";
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (revenueTimeframe !== key) e.currentTarget.style.background = "transparent";
-                                }}
-                              >
-                                {data.label}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <TimeframeDropdown value={revenueTimeframe} onChange={setRevenueTimeframe} open={showRevenueTimeframeDropdown} setOpen={setShowRevenueTimeframeDropdown} triggerRef={revenueTimeframeRef} />
                     </div>
 
                     {/* Stats & Revenue numbers */}
@@ -2785,39 +3004,18 @@ export default function Home() {
                       return filteredClients.map((client) => (
                         <tr
                           key={client.id}
+                          onClick={() => { setOnboardedClient(client); setConfiguringService(null); setCurrentView("create-service"); }}
+                          title="Open service setup"
                           style={{
                             borderBottom: "1px solid #F0F1F4",
-                            transition: "background-color 150ms ease"
+                            transition: "background-color 150ms ease",
+                            cursor: "pointer"
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#F9FAFB"}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                         >
                           {/* Client Name with Avatar */}
-                          <td style={{ padding: "12px 10px", display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "50%",
-                              background: client.color,
-                              color: "#FFFFFF",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              flexShrink: 0
-                            }}>
-                              {client.avatar}
-                            </span>
-                            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                              <span style={{ fontSize: "12px", fontWeight: 600, color: "#1F2433", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {client.name}
-                              </span>
-                              <span style={{ fontSize: "9px", color: "#8A90A0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                Score: {client.score}% • Onboarded {new Date(client.onboarded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
-                            </div>
-                          </td>
+                          <ClientIdentityCell client={client} />
 
                           {/* Account ID */}
                           <td style={{ padding: "12px 10px", fontSize: "11px", color: "#5A6072", fontFamily: "monospace" }}>
@@ -2970,13 +3168,17 @@ export default function Home() {
           </div>
         )}
 
-        {currentView === "add-organization" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "600px" }}>
-            
-            <div style={{ marginBottom: "8px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#1F2433", margin: 0 }}>Onboard New Client</h3>
+        {showOnboardModal && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(17,24,39,0.35)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+            <div style={{ width: "100%", maxWidth: "640px", maxHeight: "90vh", overflowY: "auto", background: "#FFFFFF", borderRadius: "16px", boxShadow: "0 24px 60px rgba(31,36,51,0.25)", padding: "28px", display: "flex", flexDirection: "column", gap: "20px" }}>
+
+            <div style={{ marginBottom: "0px" }}>
+              <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "#4F46FF", background: "#F4F5FF", padding: "3px 8px", borderRadius: "6px" }}>
+                {editingClientId ? "Edit · Client details" : "Step 1 of 2 · Client details"}
+              </span>
+              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#1F2433", margin: 0, marginTop: "10px" }}>{editingClientId ? "Edit Client Details" : "Onboard New Client"}</h3>
               <p style={{ fontSize: "12px", color: "#8A90A0", marginTop: "4px", margin: 0 }}>
-                Provide the essential details to register a new organization on the Reacher AI calling platform.
+                {editingClientId ? "Update this client's onboarding details." : "Tell us who this client is. Next, you'll set up the service their AI agent runs."}
               </p>
             </div>
 
@@ -3005,7 +3207,7 @@ export default function Home() {
                 <div>
                   <h4 style={{ fontSize: "15px", fontWeight: 600, color: "#065F46", margin: 0 }}>Onboarding Successful</h4>
                   <p style={{ fontSize: "12px", color: "#047857", marginTop: "4px", margin: 0 }}>
-                    {onboardSuccessMessage} Redirecting to dashboard...
+                    {onboardSuccessMessage} Loading service setup...
                   </p>
                 </div>
               </div>
@@ -3013,7 +3215,7 @@ export default function Home() {
               <form onSubmit={handleOnboardSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 
                 {/* Horizontal side-by-side fields grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px 20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "18px 20px" }}>
                   
                   {/* Business Name */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -3166,70 +3368,120 @@ export default function Home() {
                     <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
                       Client timezone <span style={{ color: "#EF4444", marginLeft: "2px" }}>*</span>
                     </label>
-                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <polyline points="12 6 12 12 16 14" />
-                        </svg>
-                      </span>
-                      <select
-                        value={orgTimezone}
-                        onChange={(e) => setOrgTimezone(e.target.value)}
+                    <div ref={timezoneRef} style={{ position: "relative" }}>
+                      <div
+                        onClick={() => setTimezoneOpen((o) => !o)}
                         style={{
                           width: "100%",
                           padding: "10px 12px 10px 36px",
                           fontSize: "12px",
-                          border: onboardErrors.timezone ? "1px solid #EF4444" : "1px solid #ECEEF2",
+                          border: onboardErrors.timezone ? "1px solid #EF4444" : timezoneOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
                           borderRadius: "8px",
-                          outline: "none",
-                          color: "#1F2433",
-                          fontFamily: "inherit",
                           background: "#FFFFFF",
-                          transition: "all 150ms ease",
-                          cursor: "pointer"
+                          color: "#1F2433",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          cursor: "pointer",
+                          userSelect: "none",
+                          position: "relative",
+                          boxSizing: "border-box",
+                          transition: "all 150ms ease"
                         }}
                       >
-                        <optgroup label="North America">
-                          <option value="America/New_York">Eastern Time (ET)</option>
-                          <option value="America/Chicago">Central Time (CT)</option>
-                          <option value="America/Denver">Mountain Time (MT)</option>
-                          <option value="America/Phoenix">Mountain Standard Time (Phoenix)</option>
-                          <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                        </optgroup>
-                        <optgroup label="Europe & GMT">
-                          <option value="Europe/London">London / GMT</option>
-                          <option value="Europe/Paris">Paris / CET</option>
-                        </optgroup>
-                        <optgroup label="Asia & Pacific">
-                          <option value="Asia/Kolkata">Kolkata / IST</option>
-                          <option value="Asia/Tokyo">Tokyo / JST</option>
-                          <option value="Australia/Sydney">Sydney / AEDT</option>
-                        </optgroup>
-                        <optgroup label="Other">
-                          <option value="UTC">Coordinated Universal Time (UTC)</option>
-                        </optgroup>
-                      </select>
+                        <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        </span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{TIMEZONE_LABEL(orgTimezone)}</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: timezoneOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </div>
+
+                      {timezoneOpen && (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px", maxHeight: "260px", overflowY: "auto" }}>
+                          {TIMEZONE_GROUPS.map((group) => (
+                            <div key={group.label}>
+                              <div style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#A0A6B4", padding: "6px 8px 2px" }}>{group.label}</div>
+                              {group.zones.map((z) => {
+                                const selected = orgTimezone === z.value;
+                                return (
+                                  <div
+                                    key={z.value}
+                                    onClick={() => { setOrgTimezone(z.value); setTimezoneOpen(false); }}
+                                    onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
+                                    style={{ padding: "7px 8px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: selected ? "#4F46FF" : "#5A6072", background: selected ? "#F4F5FF" : "transparent", fontWeight: selected ? 600 : 500 }}
+                                  >
+                                    {z.label}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {onboardErrors.timezone && (
                       <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 500 }}>{onboardErrors.timezone}</span>
                     )}
                   </div>
 
+                  {/* Industry */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>
+                      Industry
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <span style={{ position: "absolute", left: "12px", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 21h18" />
+                          <path d="M5 21V7l8-4v18" />
+                          <path d="M19 21V11l-6-4" />
+                          <path d="M9 9h.01M9 12h.01M9 15h.01M9 18h.01" />
+                        </svg>
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="e.g. Insurance, Real Estate, Dental"
+                        value={orgIndustry}
+                        onChange={(e) => setOrgIndustry(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px 10px 36px",
+                          fontSize: "12px",
+                          border: "1px solid #ECEEF2",
+                          borderRadius: "8px",
+                          outline: "none",
+                          color: "#1F2433",
+                          fontFamily: "inherit",
+                          background: "#FFFFFF",
+                          transition: "all 150ms ease"
+                        }}
+                      />
+                    </div>
+                  </div>
+
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: "flex", gap: "10px", marginTop: "8px", justifyContent: "flex-start" }}>
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "4px" }}>
                   <button
                     type="button"
                     onClick={() => {
                       setOrgName("");
+                      setOrgIndustry("");
                       setContactName("");
                       setOrgEmail("");
                       setOrgPhone("");
                       setOrgTimezone("America/New_York");
                       setOnboardErrors({});
-                      setCurrentView("dashboard");
+                      setShowOnboardModal(false);
+                      setEditingClientId(null);
                     }}
                     style={{
                       background: "#FFFFFF",
@@ -3281,25 +3533,1783 @@ export default function Home() {
                   >
                     {isOnboarding ? (
                       <>
-                        <span style={{ 
-                          width: "12px", 
-                          height: "12px", 
-                          border: "2px solid #FFFFFF", 
-                          borderTop: "2px solid transparent", 
-                          borderRadius: "50%", 
+                        <span style={{
+                          width: "12px",
+                          height: "12px",
+                          border: "2px solid #FFFFFF",
+                          borderTop: "2px solid transparent",
+                          borderRadius: "50%",
                           display: "inline-block",
                           animation: "spin 1s linear infinite"
                         }}></span>
                         Saving...
                       </>
                     ) : (
-                      "Save"
+                      editingClientId ? "Save changes" : "Proceed"
                     )}
                   </button>
                 </div>
 
               </form>
             )}
+            </div>
+          </div>
+        )}
+
+        {showAddServiceModal && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(17,24,39,0.35)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+            <div style={{ width: "100%", maxWidth: "560px", background: "#FFFFFF", borderRadius: "16px", boxShadow: "0 24px 60px rgba(31,36,51,0.25)", padding: "28px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              
+              <div>
+                <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#1F2433", margin: 0 }}>Choose Service Preset</h3>
+                <p style={{ fontSize: "12px", color: "#8A90A0", marginTop: "4px", margin: 0 }}>
+                  Select the main service preset to configure for this client.
+                </p>
+              </div>
+
+              {/* Service Cards list container */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "380px", overflowY: "auto", paddingRight: "6px" }}>
+                {[
+                  {
+                    id: "Outbound Sales / Appt Setting",
+                    title: "1. Outbound Sales / Appointment Setting",
+                    desc: "Outbound voice: Calls prospects, pitches value, and books calendar slots.",
+                    useCase: "Use Case: Cold outreach, SDR prospecting campaigns, and booking sales demos.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "Reactivation & Renewals",
+                    title: "2. Database Reactivation & Renewals",
+                    desc: "Outbound voice: Calls your own dormant or expiring contacts to win them back.",
+                    useCase: "Use Case: Re-engaging old leads, contract renewals, and win-back offers.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "Lead Qualification",
+                    title: "3. Lead Qualification & Surveys",
+                    desc: "Outbound voice: Calls fresh leads, asks qualifying Qs, and scores responses.",
+                    useCase: "Use Case: Pre-screening job applicants, market research, and lead scoring.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "Appointment Reminders",
+                    title: "4. Appointment Reminders & Recovery",
+                    desc: "Outbound voice: Calls bookings to confirm attendance or recover missed appointments.",
+                    useCase: "Use Case: Cutting no-shows, webinar reminders, and rebooking missed slots.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "AI Receptionist",
+                    title: "5. AI Receptionist (Inbound)",
+                    desc: "Inbound voice: Answers calls 24/7, schedules meetings, and answers FAQs.",
+                    useCase: "Use Case: Front-desk coverage, after-hours answering, and FAQ deflection.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "Support / Complaint Line",
+                    title: "6. Support / Complaint Line",
+                    desc: "Inbound voice: Answers calls, logs customer ticket details without booking.",
+                    useCase: "Use Case: Ticket intake, capturing client issues, and customer reassurance.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "Lead Generation",
+                    title: "7. Lead Generation (Lists)",
+                    desc: "Data only: Scrapes business contact databases to build fresh phone lists.",
+                    useCase: "Use Case: Compiling target lists (Google Maps, hotfrog) for outreach campaigns.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "List Cleaning",
+                    title: "8. List Cleaning & DNC Scrubbing",
+                    desc: "Data only: Formats phone numbers, removes duplicates, scrubs DNC lists.",
+                    useCase: "Use Case: Deduplication, timezone tagging, and ensuring compliance on lead lists.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      </svg>
+                    )
+                  },
+                  {
+                    id: "Lead Enrichment",
+                    title: "9. Lead Enrichment",
+                    desc: "Data only: Deeply researches custom lead lists to extract emails and context.",
+                    useCase: "Use Case: Gathering profile data, company details, and lead intelligence.",
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                        <polyline points="2 17 12 22 22 17" />
+                        <polyline points="2 12 12 17 22 12" />
+                      </svg>
+                    )
+                  }
+                ].map((svc) => {
+                  const isSelected = selectedServiceCategory === svc.id;
+                  return (
+                    <div
+                      key={svc.id}
+                      onClick={() => setSelectedServiceCategory(svc.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        padding: "14px 18px",
+                        background: isSelected ? "#F4F5FF" : "#FFFFFF",
+                        border: isSelected ? "2px solid #4F46FF" : "1px solid #ECEEF2",
+                        borderRadius: "10px",
+                        cursor: "pointer",
+                        transition: "all 150ms ease"
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = "#CBD2DD";
+                          e.currentTarget.style.background = "#F9FAFB";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = "#ECEEF2";
+                          e.currentTarget.style.background = "#FFFFFF";
+                        }
+                      }}
+                    >
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "8px",
+                        background: isSelected ? "#4F46FF" : "#F4F5FF",
+                        color: isSelected ? "#FFFFFF" : "#4F46FF",
+                        flexShrink: 0,
+                        transition: "all 150ms ease"
+                      }}>
+                        {svc.icon}
+                      </div>
+
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#1F2433" }}>{svc.title}</span>
+                        <span style={{ fontSize: "11px", color: "#8A90A0", lineHeight: "1.4" }}>{svc.desc}</span>
+                        <span style={{ fontSize: "10.5px", fontWeight: 600, color: isSelected ? "#3F37D9" : "#4F46FF", marginTop: "2px" }}>{svc.useCase}</span>
+                      </div>
+
+                      {/* Radio dot */}
+                      <div style={{
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "50%",
+                        border: isSelected ? "5px solid #4F46FF" : "2px solid #CBD2DD",
+                        background: "#FFFFFF",
+                        flexShrink: 0,
+                        transition: "all 150ms ease"
+                      }} />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddServiceModal(false)}
+                  style={{
+                    background: "#F4F5FF",
+                    color: "#4F46FF",
+                    border: "none",
+                    borderRadius: "10px",
+                    padding: "10px 20px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    transition: "all 150ms ease"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedServiceCategory}
+                  onClick={() => {
+                    if (selectedServiceCategory) {
+                      handleConfigureService(selectedServiceCategory);
+                      setShowAddServiceModal(false);
+                    }
+                  }}
+                  style={{
+                    background: selectedServiceCategory ? "#22C55E" : "#CBD2DD",
+                    color: "#FFFFFF",
+                    border: "none",
+                    borderRadius: "10px",
+                    padding: "10px 20px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: selectedServiceCategory ? "pointer" : "not-allowed",
+                    fontFamily: "inherit",
+                    transition: "background 150ms ease"
+                  }}
+                  onMouseEnter={(e) => { if (selectedServiceCategory) e.currentTarget.style.background = "#16A34A"; }}
+                  onMouseLeave={(e) => { if (selectedServiceCategory) e.currentTarget.style.background = "#22C55E"; }}
+                >
+                  Add Service
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {currentView === "create-service" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px", width: "100%" }}>
+
+            {/* Separator between the page heading and the content */}
+            <div style={{ height: "1px", background: "#ECEEF2", marginBottom: "4px" }} />
+
+            {/* Header — service-detail style, populated with the onboarded client */}
+            {onboardedClient && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {/* Breadcrumb path — client › current service (last = selected, lighter pill) */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", flexWrap: "wrap" }}>
+                  <span
+                    onClick={() => setCurrentView("directory")}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#4F46FF", fontWeight: 600, cursor: "pointer" }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = "#3F37D9"}
+                    onMouseLeave={(e) => e.currentTarget.style.color = "#4F46FF"}
+                  >‹ Back</span>
+                  <span style={{ color: "#C7CBF5" }}>|</span>
+                  <span style={{ color: "#4F46FF", fontWeight: 600 }}>{onboardedClient.name}</span>
+                  <span style={{ color: "#A0A6B4" }}>›</span>
+                  <span style={{ background: "#F4F5FF", color: "#4F46FF", fontWeight: 600, padding: "2px 8px", borderRadius: "6px" }}>
+                    {configuringService ? configuringService : "New Service"}
+                  </span>
+                </div>
+
+                {/* Title */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <h2 style={{ fontSize: "22px", fontWeight: 700, color: "#1F2433", margin: 0 }}>{onboardedClient.name}</h2>
+                    {/* Edit onboarding details — pencil beside the name */}
+                    <button
+                      onClick={startEditOnboarding}
+                      title="Edit details"
+                      style={{ width: "30px", height: "30px", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid #ECEEF2", borderRadius: "8px", color: "#8A90A0", cursor: "pointer", flexShrink: 0, transition: "all 150ms ease" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4F46FF"; e.currentTarget.style.color = "#4F46FF"; e.currentTarget.style.background = "#F4F5FF"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#ECEEF2"; e.currentTarget.style.color = "#8A90A0"; e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
+                    {/* Account enable/disable — off disables the whole client (e.g. non-payment) */}
+                    <button
+                      onClick={toggleClientEnabled}
+                      title={onboardedClient.enabled === false ? "Account disabled — click to enable" : "Account active — click to disable"}
+                      style={{ width: "40px", height: "22px", borderRadius: "999px", background: onboardedClient.enabled === false ? "#CBD2DD" : "#22C55E", border: "none", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 150ms ease" }}
+                    >
+                      <span style={{ position: "absolute", top: "2px", left: onboardedClient.enabled === false ? "2px" : "20px", width: "18px", height: "18px", borderRadius: "50%", background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.2)", transition: "left 150ms ease" }} />
+                    </button>
+                  </div>
+                  {/* ponytail: action wired on user's say-so */}
+                  <button
+                    onClick={() => {
+                      setShowAddServiceModal(true);
+                      setSelectedServiceCategory("");
+                      setModalStep(1);
+                      setSelectedSubService("");
+                    }}
+                    style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, transition: "background 150ms ease" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#3F37D9"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "#4F46FF"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Add Service
+                  </button>
+                </div>
+
+                {/* Status / meta line — pulled left so the first pill's text aligns with the title/breadcrumb */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", fontSize: "12px", color: "#5A6072", marginLeft: "-10px" }}>
+                  {[
+                    ["Status", clientStatus(onboardedClient).label, clientStatus(onboardedClient).color, clientStatus(onboardedClient).bg],
+                    ["Industry", onboardedClient.industry || "—", "#8B5CF6", "#F5F3FF"],
+                    ["Timezone", onboardedClient.timezone ? TIMEZONE_LABEL(onboardedClient.timezone) : "—", "#06B6D4", "#ECFEFF"],
+                    ["Contact", onboardedClient.contactName || "—", "#4F46FF", "#F4F5FF"],
+                    ["Email", onboardedClient.email || "—", "#F59E0B", "#FFFBEB"],
+                    ["Phone", onboardedClient.contactPhone || onboardedClient.contact || "—", "#EC4899", "#FDF2F8"],
+                  ].map(([label, value, color, bg]) => (
+                    <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "8px", background: bg }}>
+                      <span style={{ fontWeight: 700, color }}>{label}</span>
+                      <span style={{ color: "#1F2433", fontWeight: 500 }}>{value}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {configuringService ? (
+              configuringService === "Outbound Sales / Appt Setting" ? (
+                /* Configuration Form for Outbound Sales */
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
+                  
+                  {/* Section 3: Who it calls */}
+                  {(() => {
+                    const isConfigured = icpDescription.trim() !== "" && (isUploadListChecked || (isScrapeChecked && scrapeCity.trim() !== "" && scrapeState.trim() !== "" && scrapeBusinessType.trim() !== ""));
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Who it calls (Leads &amp; Target ICP)</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set targeting parameters for Lead Scraper or upload a custom CSV contact list.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        {/* ICP Description Textarea */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Ideal Customer Profile (ICP) Description</label>
+                          <textarea
+                            placeholder="e.g. Dental clinics, roofers, HVAC companies in Austin, TX..."
+                            value={icpDescription}
+                            onChange={(e) => setIcpDescription(e.target.value)}
+                            style={{
+                              width: "100%",
+                              minHeight: "70px",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              fontFamily: "inherit",
+                              resize: "vertical",
+                              outline: "none"
+                            }}
+                          />
+                          <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>
+                            Search terms and scraping keywords will auto-generate from this text description.
+                          </p>
+                        </div>
+
+                        {/* Checkboxes for Lead Source */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source (Select all that apply)</label>
+                          
+                          {/* Checkbox 1: Upload a list */}
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={isUploadListChecked}
+                              onChange={(e) => setIsUploadListChecked(e.target.checked)}
+                              style={{ accentColor: "#4F46FF", cursor: "pointer" }}
+                            />
+                            <span>Upload a list</span>
+                          </label>
+
+                          {/* Checkbox 2: Scrape / find leads */}
+                          {(() => {
+                            const isScrapeEnabled = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
+                            return (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: isScrapeEnabled ? "#1F2433" : "#A0A6B4", cursor: isScrapeEnabled ? "pointer" : "not-allowed" }}>
+                                  <input
+                                    type="checkbox"
+                                    disabled={!isScrapeEnabled}
+                                    checked={isScrapeChecked}
+                                    onChange={(e) => setIsScrapeChecked(e.target.checked)}
+                                    style={{ accentColor: "#4F46FF", cursor: isScrapeEnabled ? "pointer" : "not-allowed" }}
+                                  />
+                                  <span>Scrape / find leads</span>
+                                </label>
+                                {!isScrapeEnabled && (
+                                  <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
+                                    Enable the Lead Generation service for this client to use scraping.
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {isScrapeChecked && (onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation")) && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                            <div>
+                              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1F2433", display: "block" }}>Where to search for leads</span>
+                              <span style={{ fontSize: "11px", color: "#8A90A0", display: "block", marginTop: "2px" }}>We search this area for matching businesses, e.g. within 25 km of Austin, TX.</span>
+                            </div>
+                            
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>City</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Austin"
+                                  value={scrapeCity}
+                                  onChange={(e) => setScrapeCity(e.target.value)}
+                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>State</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. TX"
+                                  value={scrapeState}
+                                  onChange={(e) => setScrapeState(e.target.value)}
+                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Radius (km)</label>
+                                <input
+                                  type="number"
+                                  placeholder="e.g. 25"
+                                  value={scrapeRadius}
+                                  onChange={(e) => setScrapeRadius(e.target.value)}
+                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Business Type</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Dental Clinic"
+                                  value={scrapeBusinessType}
+                                  onChange={(e) => setScrapeBusinessType(e.target.value)}
+                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 4: Offer & Knowledge */}
+                  {(() => {
+                    const isConfigured = clientOffer.trim() !== "" && knowledgeBase.trim() !== "";
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>2. Offer &amp; Knowledge Base</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Detail the pitch proposal and core FAQ content that the agent will discuss.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>The Core Offer / Pitch Hook</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Free 30-min dental cleaning with zero out-of-pocket costs"
+                            value={clientOffer}
+                            onChange={(e) => setClientOffer(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Knowledge Base (FAQs &amp; Business Info)</label>
+                          <textarea
+                            placeholder="e.g. Business hours are 8am-6pm. We accept major insurances. Dr. Smith has 15 years experience..."
+                            value={knowledgeBase}
+                            onChange={(e) => setKnowledgeBase(e.target.value)}
+                            style={{
+                              width: "100%",
+                              minHeight: "75px",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              fontFamily: "inherit",
+                              resize: "vertical",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+
+                        {/* File Upload Zone */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Attach Documents</label>
+                          <label style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "2px dashed #ECEEF2",
+                            borderRadius: "10px",
+                            padding: "24px 16px",
+                            background: "#F9FAFB",
+                            cursor: "pointer",
+                            transition: "all 150ms ease"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = "#4F46FF"}
+                          onMouseLeave={(e) => e.currentTarget.style.borderColor = "#ECEEF2"}
+                          >
+                            <input
+                              type="file"
+                              multiple
+                              style={{ display: "none" }}
+                              onChange={(e) => {
+                                if (e.target.files) {
+                                  const names = Array.from(e.target.files).map(f => f.name);
+                                  setAttachedDocuments([...attachedDocuments, ...names]);
+                                }
+                              }}
+                            />
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#A0A6B4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "8px" }}>
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            <span style={{ fontSize: "12px", fontWeight: 600, color: "#5A6072" }}>Drag a file or click to upload</span>
+                            <span style={{ fontSize: "10px", color: "#8A90A0", marginTop: "2px" }}>PDF, DOCX, TXT</span>
+                          </label>
+
+                          {attachedDocuments.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
+                              {attachedDocuments.map((docName, docIdx) => (
+                                <div key={docIdx} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#F4F5FF", border: "1px solid #C7CBF5", borderRadius: "16px", padding: "4px 10px", fontSize: "11.5px", color: "#4F46FF", fontWeight: 500 }}>
+                                  <span>{docName}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttachedDocuments(attachedDocuments.filter((_, i) => i !== docIdx))}
+                                    style={{ background: "transparent", border: "none", color: "#EF4444", fontWeight: "bold", fontSize: "13px", cursor: "pointer", padding: 0 }}
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 5: The meeting */}
+                  {(() => {
+                    const isModeSelected = meetingMode !== "";
+                    const isLinkConfigured = (meetingMode === "Online" || meetingMode === "Both") ? meetingLink.trim() !== "" : true;
+                    const isAddressConfigured = (meetingMode === "In-person" || meetingMode === "Both") ? meetingAddress.trim() !== "" : true;
+                    const isConfigured = isModeSelected && isLinkConfigured && isAddressConfigured;
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>3. The Meeting (Calendar &amp; Booking)</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set appointment modes, scheduling buffers, and calendar availability windows.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "8px", display: "block" }}>Meeting Mode (Required)</label>
+                          <div style={{ display: "flex", gap: "16px" }}>
+                            {["Online", "In-person", "Both"].map((mode) => {
+                              const isChecked = meetingMode === mode;
+                              return (
+                                <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 600, color: "#1F2433", cursor: "pointer" }}>
+                                  <input
+                                    type="radio"
+                                    name="meetingMode"
+                                    checked={isChecked}
+                                    onChange={() => setMeetingMode(mode)}
+                                    style={{
+                                      accentColor: "#4F46FF",
+                                      cursor: "pointer"
+                                    }}
+                                  />
+                                  {mode}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {(meetingMode === "Online" || meetingMode === "Both") && (
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Meeting Link (Google Meet / Zoom)</label>
+                            <input
+                              type="text"
+                              placeholder="https://meet.google.com/xyz"
+                              value={meetingLink}
+                              onChange={(e) => setMeetingLink(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                        )}
+
+                        {(meetingMode === "In-person" || meetingMode === "Both") && (
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>In-Person Meeting Address</label>
+                            <input
+                              type="text"
+                              placeholder="123 Business Rd, Suite 100"
+                              value={meetingAddress}
+                              onChange={(e) => setMeetingAddress(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                        )}
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Availability Windows</label>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {availabilityWindows.map((win, idx) => (
+                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <select
+                                  value={win.day}
+                                  onChange={(e) => {
+                                    const next = [...availabilityWindows];
+                                    next[idx].day = e.target.value;
+                                    setAvailabilityWindows(next);
+                                  }}
+                                  style={{ padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", background: "#FFFFFF", color: "#1F2433", outline: "none" }}
+                                >
+                                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => (
+                                    <option key={d} value={d}>{d}</option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="time"
+                                  value={win.start}
+                                  onChange={(e) => {
+                                    const next = [...availabilityWindows];
+                                    next[idx].start = e.target.value;
+                                    setAvailabilityWindows(next);
+                                  }}
+                                  style={{ padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", color: "#1F2433", outline: "none" }}
+                                />
+                                <span style={{ fontSize: "12px", color: "#8A90A0" }}>to</span>
+                                <input
+                                  type="time"
+                                  value={win.end}
+                                  onChange={(e) => {
+                                    const next = [...availabilityWindows];
+                                    next[idx].end = e.target.value;
+                                    setAvailabilityWindows(next);
+                                  }}
+                                  style={{ padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", color: "#1F2433", outline: "none" }}
+                                />
+                                {availabilityWindows.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAvailabilityWindows(availabilityWindows.filter((_, i) => i !== idx));
+                                    }}
+                                    style={{ background: "transparent", border: "none", color: "#EF4444", fontSize: "16px", cursor: "pointer", fontWeight: "bold" }}
+                                  >
+                                    &times;
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAvailabilityWindows([...availabilityWindows, { day: "Monday", start: "09:00", end: "17:00" }]);
+                              }}
+                              style={{
+                                width: "fit-content",
+                                background: "transparent",
+                                border: "1px dashed #4F46FF",
+                                color: "#4F46FF",
+                                borderRadius: "8px",
+                                padding: "6px 12px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                marginTop: "4px"
+                              }}
+                            >
+                              + Add Window
+                            </button>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Meeting Length (min)</label>
+                            <input
+                              type="number"
+                              value={meetingLength}
+                              onChange={(e) => setMeetingLength(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Buffer Between (min)</label>
+                            <input
+                              type="number"
+                              value={meetingBuffer}
+                              onChange={(e) => setMeetingBuffer(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Booking Capacity</label>
+                            <input
+                              type="number"
+                              value={bookingCapacity}
+                              onChange={(e) => setBookingCapacity(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 6: Phone pool & Caller IDs */}
+                  {(() => {
+                    const isConfigured = phoneNumbers.some(p => p.number.trim() !== "");
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>4. Phone Pool &amp; Calling Window</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Manage rotating caller IDs to scale daily dials safely and comply with call times.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Phone Number Pool (Caller IDs)</label>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {phoneNumbers.map((p, idx) => (
+                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <input
+                                  type="text"
+                                  placeholder="+1 (555) 123-4567"
+                                  value={p.number}
+                                  onChange={(e) => {
+                                    const next = [...phoneNumbers];
+                                    next[idx].number = e.target.value;
+                                    setPhoneNumbers(next);
+                                  }}
+                                  style={{ flex: 1, padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                  <span style={{ fontSize: "11px", color: "#8A90A0" }}>Daily Cap:</span>
+                                  <input
+                                    type="number"
+                                    value={p.cap}
+                                    onChange={(e) => {
+                                      const next = [...phoneNumbers];
+                                      next[idx].cap = parseInt(e.target.value) || 0;
+                                      setPhoneNumbers(next);
+                                    }}
+                                    style={{ width: "60px", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", color: "#1F2433", outline: "none" }}
+                                  />
+                                </div>
+                                {phoneNumbers.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPhoneNumbers(phoneNumbers.filter((_, i) => i !== idx));
+                                    }}
+                                    style={{ background: "transparent", border: "none", color: "#EF4444", fontSize: "16px", cursor: "pointer", fontWeight: "bold" }}
+                                  >
+                                    &times;
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPhoneNumbers([...phoneNumbers, { number: "", cap: 40 }]);
+                              }}
+                              style={{
+                                width: "fit-content",
+                                background: "transparent",
+                                border: "1px dashed #4F46FF",
+                                color: "#4F46FF",
+                                borderRadius: "8px",
+                                padding: "6px 12px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                marginTop: "4px"
+                              }}
+                            >
+                              + Add Phone Number
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Live computed capacity indicator */}
+                        {(() => {
+                          const validCount = phoneNumbers.filter(p => p.number.trim() !== "").length;
+                          const totalCap = phoneNumbers.reduce((acc, curr) => acc + (curr.number.trim() !== "" ? curr.cap : 0), 0);
+                          return (
+                            <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#065F46", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                              </svg>
+                              <span>
+                                {validCount} numbers &times; 40 = {totalCap} dials/day capacity.
+                              </span>
+                            </div>
+                          );
+                        })()}
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginTop: "4px" }}>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Calling Starts</label>
+                            <input
+                              type="time"
+                              value={callingHoursStart}
+                              onChange={(e) => setCallingHoursStart(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Calling Ends</label>
+                            <input
+                              type="time"
+                              value={callingHoursEnd}
+                              onChange={(e) => setCallingHoursEnd(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                          
+                          {/* Calling timezone custom dropdown */}
+                          <div style={{ position: "relative" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Timezone</label>
+                            <div
+                              onClick={() => setIsTimezoneDropdownOpen(!isTimezoneDropdownOpen)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyLeft: "space-between",
+                                padding: "10px 12px",
+                                border: isTimezoneDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontSize: "13px",
+                                color: "#1F2433",
+                                background: "#FFFFFF",
+                                transition: "all 150ms ease",
+                                display: "flex",
+                                justifyContent: "space-between"
+                              }}
+                            >
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callingTimezone}</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isTimezoneDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </div>
+                            {isTimezoneDropdownOpen && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px", maxHeight: "150px", overflowY: "auto" }}>
+                                {["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Phoenix", "Europe/London", "Asia/Kolkata"].map((z) => (
+                                  <div
+                                    key={z}
+                                    onClick={() => {
+                                      setCallingTimezone(z);
+                                      setIsTimezoneDropdownOpen(false);
+                                    }}
+                                    style={{
+                                      padding: "8px 10px",
+                                      fontSize: "12px",
+                                      borderRadius: "6px",
+                                      cursor: "pointer",
+                                      color: callingTimezone === z ? "#4F46FF" : "#5A6072",
+                                      background: callingTimezone === z ? "#F4F5FF" : "transparent",
+                                      fontWeight: callingTimezone === z ? 600 : 500
+                                    }}
+                                    onMouseEnter={(e) => { if (callingTimezone !== z) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (callingTimezone !== z) e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    {z}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 1: Agent & Script (Moved to the bottom!) */}
+                  {(() => {
+                    const isConfigured = true; // Always true for Section 1 as all fields have defaults
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>5. Agent &amp; Script</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Define the AI calling script variant, instructions, and voice preferences.</span>
+                          </div>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                            Configured ✓
+                          </span>
+                        </div>
+
+                        {/* Dropdown for Script Variant */}
+                        <div ref={variantRef} style={{ position: "relative" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Script Variant (Preset Selection)</label>
+                          <div
+                            onClick={() => setIsVariantDropdownOpen(!isVariantDropdownOpen)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 10px",
+                              border: isVariantDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              color: "#1F2433",
+                              background: "#FFFFFF",
+                              transition: "all 150ms ease",
+                              maxWidth: "320px"
+                            }}
+                          >
+                            <span>
+                              {scriptVariant === "default" && "Cold-call → book demo (Default)"}
+                              {scriptVariant === "appointment_setting" && "Lighter pitch → just fill calendar"}
+                            </span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVariantDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </div>
+                          {isVariantDropdownOpen && (
+                            <div style={{ position: "absolute", top: "100%", left: 0, marginTop: "4px", width: "320px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                              {[
+                                { value: "default", label: "Cold-call → book demo (Default)", prompt: "You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in." },
+                                { value: "appointment_setting", label: "Lighter pitch → just fill calendar", prompt: "You are a friendly outbound rep for the business described in your context. Your only goal is to get a meeting on the calendar — keep the pitch light, don't oversell. Confirm you're speaking to the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in." }
+                              ].map((item) => (
+                                <div
+                                  key={item.value}
+                                  onClick={() => {
+                                    setScriptVariant(item.value);
+                                    setScriptText(item.prompt);
+                                    setIsVariantDropdownOpen(false);
+                                  }}
+                                  style={{
+                                    padding: "8px 10px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    color: scriptVariant === item.value ? "#4F46FF" : "#5A6072",
+                                    background: scriptVariant === item.value ? "#F4F5FF" : "transparent",
+                                    fontWeight: scriptVariant === item.value ? 600 : 500
+                                  }}
+                                  onMouseEnter={(e) => { if (scriptVariant !== item.value) e.currentTarget.style.background = "#F7F8FA"; }}
+                                  onMouseLeave={(e) => { if (scriptVariant !== item.value) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  {item.label}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* System script prompt */}
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Agent Instructions / Script Prompt</label>
+                            <button
+                              type="button"
+                              onClick={handleGenerateScript}
+                              style={{
+                                background: "#F4F5FF",
+                                color: "#4F46FF",
+                                border: "1px solid #C7CBF5",
+                                borderRadius: "6px",
+                                padding: "4px 10px",
+                                fontSize: "11.5px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}
+                            >
+                              ✨ Generate script
+                            </button>
+                          </div>
+                          <textarea
+                            value={scriptText}
+                            onChange={(e) => setScriptText(e.target.value)}
+                            style={{
+                              width: "100%",
+                              minHeight: "100px",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              fontFamily: "inherit",
+                              resize: "vertical",
+                              outline: "none"
+                            }}
+                          />
+                          <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>Auto-generated from your config — edit freely.</p>
+                        </div>
+
+                        {/* Opening Line */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Opening Line (First Message)</label>
+                          <input
+                            type="text"
+                            value={openingLine}
+                            onChange={(e) => setOpeningLine(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+
+                        {/* Success Metric */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Success Metric</label>
+                          <input
+                            type="text"
+                            value={successMetric}
+                            onChange={(e) => setSuccessMetric(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+
+                        {/* Voice & Model dropdowns */}
+                        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+                          {/* Voice select */}
+                          <div ref={voiceRef} style={{ flex: 1, position: "relative" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Voice Profile</label>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <div
+                                onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
+                                style={{
+                                  flex: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyLeft: "space-between",
+                                  padding: "10px 12px",
+                                  border: isVoiceDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
+                                  borderRadius: "8px",
+                                  cursor: "pointer",
+                                  fontSize: "13px",
+                                  color: "#1F2433",
+                                  background: "#FFFFFF",
+                                  transition: "all 150ms ease",
+                                  display: "flex",
+                                  justifyContent: "space-between"
+                                }}
+                              >
+                                <span>
+                                  {voiceSelection === "default" && "Default voice (11labs)"}
+                                  {voiceSelection === "rachel" && "Rachel (11labs)"}
+                                  {voiceSelection === "drew" && "Drew (11labs)"}
+                                  {voiceSelection === "custom" && "Custom voice (VAPI)"}
+                                </span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoiceDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease", flexShrink: 0 }}>
+                                  <path d="m6 9 6 6 6-6" />
+                                </svg>
+                              </div>
+                              <button
+                                type="button"
+                                title="Voice preview — coming when voices are connected"
+                                style={{
+                                  background: "#F4F5FF",
+                                  color: "#4F46FF",
+                                  border: "1px solid #C7CBF5",
+                                  borderRadius: "8px",
+                                  padding: "10px 14px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px"
+                                }}
+                              >
+                                <span>▶</span> Preview
+                              </button>
+                            </div>
+                            {isVoiceDropdownOpen && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                                {[
+                                  { value: "default", label: "Default voice (11labs)" },
+                                  { value: "rachel", label: "Rachel (11labs)" },
+                                  { value: "drew", label: "Drew (11labs)" },
+                                  { value: "custom", label: "Custom voice (VAPI)" }
+                                ].map((item) => (
+                                  <div
+                                    key={item.value}
+                                    onClick={() => {
+                                      setVoiceSelection(item.value);
+                                      setIsVoiceDropdownOpen(false);
+                                    }}
+                                    style={{
+                                      padding: "8px 10px",
+                                      fontSize: "12px",
+                                      borderRadius: "6px",
+                                      cursor: "pointer",
+                                      color: voiceSelection === item.value ? "#4F46FF" : "#5A6072",
+                                      background: voiceSelection === item.value ? "#F4F5FF" : "transparent",
+                                      fontWeight: voiceSelection === item.value ? 600 : 500
+                                    }}
+                                    onMouseEnter={(e) => { if (voiceSelection !== item.value) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (voiceSelection !== item.value) e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    {item.label}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Model dropdown */}
+                        <div ref={modelRef} style={{ position: "relative", maxWidth: "320px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>AI Model</label>
+                          <div
+                            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "10px 12px",
+                              border: isModelDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              background: "#FFFFFF",
+                              transition: "all 150ms ease"
+                            }}
+                          >
+                            <span>
+                              {modelSelection === "gpt-4o-mini" && "GPT-4o-mini"}
+                              {modelSelection === "gpt-4o" && "GPT-4o"}
+                              {modelSelection === "claude-3-5-sonnet" && "Claude 3.5 Sonnet"}
+                            </span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isModelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </div>
+                          {isModelDropdownOpen && (
+                            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                              {[
+                                { value: "gpt-4o-mini", label: "GPT-4o-mini" },
+                                { value: "gpt-4o", label: "GPT-4o" },
+                                { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" }
+                              ].map((item) => (
+                                <div
+                                  key={item.value}
+                                  onClick={() => {
+                                    setModelSelection(item.value);
+                                    setIsModelDropdownOpen(false);
+                                  }}
+                                  style={{
+                                    padding: "8px 10px",
+                                    fontSize: "12px",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    color: modelSelection === item.value ? "#4F46FF" : "#5A6072",
+                                    background: modelSelection === item.value ? "#F4F5FF" : "transparent",
+                                    fontWeight: modelSelection === item.value ? 600 : 500
+                                  }}
+                                  onMouseEnter={(e) => { if (modelSelection !== item.value) e.currentTarget.style.background = "#F7F8FA"; }}
+                                  onMouseLeave={(e) => { if (modelSelection !== item.value) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  {item.label}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* Surfaced Auto-Config Section 1: Retry & pacing */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isRetryPacingCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsRetryPacingCollapsed(!isRetryPacingCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isRetryPacingCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Retry &amp; Pacing</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isRetryPacingCollapsed && (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <div>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Call Attempts</label>
+                          <input type="number" value={maxCallAttempts} onChange={(e) => setMaxCallAttempts(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Retry Gap (Days)</label>
+                          <input type="number" value={retryGapDays} onChange={(e) => setRetryGapDays(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Daily Cap Per Number</label>
+                          <input type="number" value={dailyCapPerNumber} onChange={(e) => setDailyCapPerNumber(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Surfaced Auto-Config Section 2: Voicemail */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isVoicemailCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsVoicemailCollapsed(!isVoicemailCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoicemailCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Voicemail Handling</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isVoicemailCollapsed && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px", color: "#5A6072" }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "1px" }}>
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                        <span>
+                          <strong style={{ color: "#1F2433" }}>No voicemail is ever left.</strong> If a call reaches an answering machine, the agent hangs up immediately — you&apos;re never charged for talking to a machine. The call is marked unanswered and retried later.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Surfaced Auto-Config Section 3: Compliance */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isComplianceCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsComplianceCollapsed(!isComplianceCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isComplianceCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Compliance &amp; Calling Window</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isComplianceCollapsed && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <p style={{ margin: 0, fontSize: "11px", color: "#8A90A0" }}>These stay on for every calling agent — legal/safety, not editable.</p>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
+                          DNC Scrub (opt-out list) <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
+                          Opt-out keyword detection (TCPA) <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
+                          Respect lead timezone call windows <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Surfaced Auto-Config Section 4: Enrichment */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isEnrichmentCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsEnrichmentCollapsed(!isEnrichmentCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isEnrichmentCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Lead Enrichment Settings</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isEnrichmentCollapsed && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked={enrichEnabled} onChange={(e) => setEnrichEnabled(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
+                          Enrich each lead before dialing
+                        </label>
+                        {enrichEnabled && (
+                          <div ref={depthRef} style={{ position: "relative" }}>
+                            <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Enrichment Depth</label>
+                            <div
+                              onClick={() => setIsDepthDropdownOpen(!isDepthDropdownOpen)}
+                              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: isDepthDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "6px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
+                            >
+                              <span>{enrichmentDepth}</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isDepthDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </div>
+                            {isDepthDropdownOpen && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                                {["Basic (name + phone)", "Standard Profile + Website", "Deep (profile + website + email + ICP fit)"].map((opt) => (
+                                  <div
+                                    key={opt}
+                                    onClick={() => { setEnrichmentDepth(opt); setIsDepthDropdownOpen(false); }}
+                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: enrichmentDepth === opt ? "#4F46FF" : "#5A6072", background: enrichmentDepth === opt ? "#F4F5FF" : "transparent", fontWeight: enrichmentDepth === opt ? 600 : 500 }}
+                                    onMouseEnter={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    {opt}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Surfaced Auto-Config Section 5: Scrape Sources */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isScrapeSourcesCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsScrapeSourcesCollapsed(!isScrapeSourcesCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isScrapeSourcesCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Scraper Sources</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isScrapeSourcesCollapsed && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <label style={{ fontWeight: 600, color: "#5A6072", display: "block" }}>Scraping search engines enabled <span style={{ color: "#8A90A0", fontWeight: 500 }}>(click to toggle)</span></label>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          {["Google Maps", "Yellow Pages", "Hotfrog"].map((s) => {
+                            const on = scrapeSources.includes(s);
+                            return (
+                              <span
+                                key={s}
+                                onClick={() => setScrapeSources(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
+                                style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", background: on ? "#F4F5FF" : "#F4F5F7", border: on ? "1px solid #C7CBF5" : "1px solid #ECEEF2", color: on ? "#4F46FF" : "#A0A6B4", fontSize: "11px", fontWeight: 600, cursor: "pointer", userSelect: "none" }}
+                              >
+                                {on ? "✓ " : ""}{s}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Surfaced Auto-Config Section 6: Call Limits */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isCallLimitsCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsCallLimitsCollapsed(!isCallLimitsCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCallLimitsCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Calling Limits &amp; Batching</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isCallLimitsCollapsed && (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <div>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Call Length (Min)</label>
+                          <input type="number" value={maxCallLength} onChange={(e) => setMaxCallLength(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Leads Per Scraper Run</label>
+                          <input type="number" value={maxLeadsPerRun} onChange={(e) => setMaxLeadsPerRun(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 7: Footer actions */}
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "16px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfiguringService(null)}
+                      style={{
+                        background: "#F4F5FF",
+                        color: "#4F46FF",
+                        border: "none",
+                        borderRadius: "10px",
+                        padding: "10px 20px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        transition: "all 150ms ease"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!meetingMode}
+                      onClick={handleActivateService}
+                      style={{
+                        background: meetingMode ? "#22C55E" : "#CBD2DD",
+                        color: "#FFFFFF",
+                        border: "none",
+                        borderRadius: "10px",
+                        padding: "10px 20px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: meetingMode ? "pointer" : "not-allowed",
+                        fontFamily: "inherit",
+                        transition: "background 150ms ease"
+                      }}
+                      onMouseEnter={(e) => { if (meetingMode) e.currentTarget.style.background = "#16A34A"; }}
+                      onMouseLeave={(e) => { if (meetingMode) e.currentTarget.style.background = "#22C55E"; }}
+                    >
+                      {onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service"}
+                    </button>
+                  </div>
+
+                </div>
+              ) : (
+                /* Centered Coming Soon Placeholder for the other 8 service IDs */
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px", border: "1px solid #ECEEF2", borderRadius: "12px", background: "#FFFFFF", textAlign: "center", marginTop: "10px" }}>
+                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="9" y1="21" x2="9" y2="9" />
+                      <line x1="15" y1="21" x2="15" y2="15" />
+                      <line x1="3" y1="9" x2="21" y2="9" />
+                      <line x1="3" y1="15" x2="21" y2="15" />
+                    </svg>
+                  </div>
+                  <h4 style={{ fontSize: "16px", fontWeight: 600, color: "#1F2433", margin: 0 }}>Configuration for {configuringService}</h4>
+                  <p style={{ fontSize: "13px", color: "#8A90A0", margin: "8px 0 20px" }}>This configuration module is coming soon.</p>
+                  <button
+                    type="button"
+                    onClick={() => setConfiguringService(null)}
+                    style={{ background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "10px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "background 150ms ease" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                  >
+                    Back to Services
+                  </button>
+                </div>
+              )
+            ) : (
+              /* Lists Active Services on the Client, or shows Empty State if none */
+              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                {onboardedClient?.serviceConfigs && Object.keys(onboardedClient.serviceConfigs).length > 0 ? (
+                  <>
+                    <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433", margin: 0 }}>Active Services</h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      {Object.keys(onboardedClient.serviceConfigs).map((svcId) => {
+                        const config = onboardedClient.serviceConfigs?.[svcId];
+                        const isActive = onboardedClient.activeServices?.includes(svcId);
+                        return (
+                          <div key={svcId} style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", opacity: isActive ? 1 : 0.85 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <span style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#F4F5FF", color: "#4F46FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                                  </svg>
+                                </span>
+                                <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{svcId}</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                {isActive ? (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#10B981", background: "#E6FDF4", padding: "2px 8px", borderRadius: "6px" }}>
+                                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10B981" }} />
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#8A90A0", background: "#F1F3F5", padding: "2px 8px", borderRadius: "6px" }}>
+                                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#8A90A0" }} />
+                                    Inactive
+                                  </span>
+                                )}
+
+                                {/* Toggle switch */}
+                                <div
+                                  onClick={() => {
+                                    if (isActive) {
+                                      handleDeactivateService(svcId);
+                                    } else {
+                                      const c = onboardedClient;
+                                      if (c) {
+                                        const active = c.activeServices || [];
+                                        const updatedActive = [...active, svcId];
+                                        const updated = { ...c, activeServices: updatedActive };
+                                        setClients(prev => prev.map(x => x.id === c.id ? updated : x));
+                                        setOnboardedClient(updated);
+                                      }
+                                    }
+                                  }}
+                                  style={{
+                                    width: "36px",
+                                    height: "20px",
+                                    borderRadius: "10px",
+                                    background: isActive ? "#22C55E" : "#CBD2DD",
+                                    position: "relative",
+                                    cursor: "pointer",
+                                    transition: "background 150ms ease",
+                                    display: "inline-block"
+                                  }}
+                                >
+                                  <div style={{
+                                    width: "14px",
+                                    height: "14px",
+                                    borderRadius: "50%",
+                                    background: "#FFFFFF",
+                                    position: "absolute",
+                                    top: "3px",
+                                    left: isActive ? "19px" : "3px",
+                                    transition: "left 150ms ease"
+                                  }} />
+                                </div>
+
+                                {/* Edit icon button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfigureService(svcId)}
+                                  title="Edit Service Configuration"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "#5A6072",
+                                    cursor: "pointer",
+                                    padding: "4px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    borderRadius: "4px",
+                                    transition: "all 150ms ease"
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.color = "#4F46FF"; e.currentTarget.style.background = "#F4F5FF"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.color = "#5A6072"; e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 20h9" />
+                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                  </svg>
+                                </button>
+
+                                {/* Delete button (only when inactive) */}
+                                {!isActive && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteService(svcId)}
+                                    title="Delete Service"
+                                    style={{
+                                      background: "transparent",
+                                      border: "none",
+                                      color: "#EF4444",
+                                      cursor: "pointer",
+                                      padding: "4px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      borderRadius: "4px",
+                                      transition: "all 150ms ease"
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                      <line x1="10" y1="11" x2="10" y2="17" />
+                                      <line x1="14" y1="11" x2="14" y2="17" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Summary Detail items */}
+                            {svcId === "Outbound Sales / Appt Setting" && config ? (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>AI Model / Voice</span>
+                                  <span style={{ color: "#1F2433" }}>{config.modelSelection} / {config.voiceSelection === "default" ? "Default voice (11labs)" : config.voiceSelection}</span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Phone Pool &amp; Capacity</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {config.phoneNumbers?.length || 0} numbers configured ({ (config.phoneNumbers || []).reduce((acc, curr) => acc + curr.cap, 0) } dials/day)
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Meeting Mode</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {config.meetingMode} {config.meetingMode === "Online" || config.meetingMode === "Both" ? `(${config.meetingLink || "No link"})` : ""}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Target Offer</span>
+                                  <span style={{ color: "#1F2433", fontStyle: "italic" }}>&quot;{config.clientOffer || "No offer set"}&quot;</span>
+                                </div>
+                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
+                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    {config.scriptText}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: "12px", color: "#8A90A0", margin: 0 }}>Service has default system parameters enabled.</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px", border: "1px dashed #ECEEF2", borderRadius: "12px", background: "#FFFFFF", textAlign: "center" }}>
+                    <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#F4F5FF", color: "#4F46FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+                        <path d="M12 8v8" />
+                        <path d="M8 12h8" />
+                      </svg>
+                    </div>
+                    <h4 style={{ fontSize: "15px", fontWeight: 600, color: "#1F2433", margin: 0 }}>No Active Services Configured</h4>
+                    <p style={{ fontSize: "13px", color: "#8A90A0", margin: "8px 0 20px", maxWidth: "340px" }}>
+                      This client doesn&apos;t have any active calling agents or data pipelines set up yet.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddServiceModal(true);
+                        setSelectedServiceCategory("");
+                        setSelectedSubService("");
+                      }}
+                      style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "background 150ms ease" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#3F37D9"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "#4F46FF"}
+                    >
+                      Add Your First Service
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import { supabase } from "./lib/supabase";
 import type { RetryRules } from "./outcome";
+import { meetingModeInstruction, type BookingConfig } from "./booking";
 
 const VAPI_BASE = "https://api.vapi.ai";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -15,7 +16,7 @@ export type CallAccount = {
 // calling). Returns undefined when there's nothing to add. Pure + unit-tested; any account's assistant.
 export function buildCallOverrides(
   assistant: Record<string, any> | null,
-  opts: { knowledgeBase?: string | null; businessName?: string | null; profile?: string | null },
+  opts: { knowledgeBase?: string | null; businessName?: string | null; profile?: string | null; meetingInstruction?: string | null },
 ): Record<string, unknown> | undefined {
   const extra: { role: string; content: string }[] = [];
   if (opts.knowledgeBase?.trim()) {
@@ -23,6 +24,11 @@ export function buildCallOverrides(
       role: "system",
       content: `ABOUT THE BUSINESS YOU REPRESENT (use this to answer questions accurately): ${opts.knowledgeBase.trim()}`,
     });
+  }
+  // Meeting mode: tells the agent whether to offer in-person, online, or ask. Keeps it from offering
+  // a format the client doesn't do.
+  if (opts.meetingInstruction?.trim()) {
+    extra.push({ role: "system", content: `BOOKING — ${opts.meetingInstruction.trim()}` });
   }
   if (opts.profile?.trim()) {
     extra.push({
@@ -71,8 +77,11 @@ export async function placeCall(
       phoneNumberId,
       customer: { number: toNumber, ...(name ? { name } : {}) },
       assistant: account.vapi_assistant,
-      // ponytail: amd routes voicemail to endedReason "voicemail" → no_answer retry (not_interested burn).
-      // Verify field name at api.vapi.ai/api#/Calls/CallController_create if this has no effect.
+      // We NEVER leave a voicemail (it burns paid minutes talking to a machine). amd detects the
+      // machine → endedReason "voicemail" → classified no_answer and retried later. The accounts
+      // `leave_voicemail`/`voicemail_message` columns are intentionally UNUSED — do not wire them.
+      // TODO(verify): confirm VAPI hangs up immediately on detection (api.vapi.ai/api#/Calls) so the
+      // agent never speaks to the machine first.
       amd: { enabled: true },
       ...(metadata ? { metadata } : {}),
       ...(assistantOverrides ? { assistantOverrides } : {}),
@@ -135,7 +144,7 @@ function isCurrentlyCallable(timezone: string | null | undefined, startHour: num
 export async function callContact(accountId: string, leadId: string): Promise<void> {
   const { data: acct, error: aErr } = await supabase
     .from("accounts")
-    .select("vapi_phone_numbers, vapi_assistant, retry_rules, broker_knowledge_base, first_message, calling_hours_start, calling_hours_end")
+    .select("vapi_phone_numbers, vapi_assistant, retry_rules, broker_knowledge_base, first_message, calling_hours_start, calling_hours_end, booking")
     .eq("id", accountId)
     .single();
   if (aErr || !acct) throw new Error(`Account ${accountId} not found: ${aErr?.message}`);
@@ -168,6 +177,7 @@ export async function callContact(accountId: string, leadId: string): Promise<vo
     knowledgeBase: acct.broker_knowledge_base as string | null,
     businessName: lead.business_name,
     profile: lead.business_profile,
+    meetingInstruction: acct.booking ? meetingModeInstruction(acct.booking as BookingConfig) : null,
   });
 
   // 2.4 Outbound firstMessage: override the assistant's default (which may be the inbound greeting)

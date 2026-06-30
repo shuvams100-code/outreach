@@ -36,3 +36,31 @@ console.log("computeFreeSlots: ok");
 const sat = { ...opts, from: new Date("2026-06-27T04:00:00Z") };
 assert.equal(computeFreeSlots([], sat).length, 0);
 console.log("computeFreeSlots weekend skip: ok");
+
+// --- format-scoped windows ---
+// Thursday, in-person 9–12 + online 13–17 (Mon–Fri). Request online → only afternoon slots.
+const split = {
+  from, horizonDays: 1, tz: "America/New_York", durationMin: 60, bufferMin: 0, maxSlots: 20,
+  windows: [
+    { dayStartHour: 9, dayEndHour: 12, days: [1, 2, 3, 4, 5], format: "in_person" as const },
+    { dayStartHour: 13, dayEndHour: 17, days: [1, 2, 3, 4, 5], format: "online" as const },
+  ],
+};
+const online = computeFreeSlots([], { ...split, format: "online" });
+assert.equal(online.length, 4); // 13,14,15,16 ET
+assert.equal(online[0], "2026-06-25T17:00:00.000Z"); // 1pm ET
+assert.ok(!online.includes("2026-06-25T13:00:00.000Z")); // 9am ET (in-person) excluded
+const inperson = computeFreeSlots([], { ...split, format: "in_person" });
+assert.equal(inperson.length, 3); // 9,10,11 ET
+assert.ok(inperson.includes("2026-06-25T13:00:00.000Z")); // 9am ET present
+// "both" request sees every window
+assert.equal(computeFreeSlots([], { ...split, format: "both" }).length, 7);
+console.log("computeFreeSlots format windows: ok");
+
+// --- shared time: a busy block blocks the slot regardless of the requested format ---
+// 1pm ET online slot is taken (by anything) → it must disappear from an online request too.
+const busyOnline: BusyBlock[] = [{ start: "2026-06-25T17:00:00Z", end: "2026-06-25T18:00:00Z" }];
+const afterBusy = computeFreeSlots(busyOnline, { ...split, format: "online" });
+assert.ok(!afterBusy.includes("2026-06-25T17:00:00.000Z"));
+assert.equal(afterBusy.length, 3);
+console.log("computeFreeSlots shared-time busy: ok");

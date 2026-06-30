@@ -1,8 +1,18 @@
 import { supabase } from "./lib/supabase";
 import { getAvailableSlots, bookSlot, cancelBooking } from "./booking";
-import { notifyBookingCreated, notifyCalendarDisconnected } from "./notify";
+import { notifyBookingCreated, notifyBookingEmails, notifyCalendarDisconnected } from "./notify";
 import { normalizePhone } from "./upload";
 import { timezoneFromPhone } from "./enrich";
+import type { MeetingFormat } from "./calendar";
+
+// The agent passes the meeting format loosely ("video", "in-person", …) — normalize to our two values.
+// Unknown/absent → undefined, so the account's own mode decides.
+function normMeetingFormat(v: any): MeetingFormat | undefined {
+  const s = String(v ?? "").toLowerCase().replace(/[\s_-]/g, "");
+  if (["inperson", "physical", "office", "visit"].includes(s)) return "in_person";
+  if (["online", "video", "virtual", "remote", "call"].includes(s)) return "online";
+  return undefined;
+}
 
 // The tools VAPI calls mid-conversation so the agent can act against the real system.
 // HTTP lives in server.ts; the logic here is plain and unit-testable.
@@ -95,8 +105,9 @@ async function ensureLead(accountId: string, ctx: CallContext, name?: string | n
   return created?.id ?? null;
 }
 
-export async function handleCheckAvailability(accountId: string): Promise<string> {
-  const slots = await getAvailableSlots(accountId, new Date(), 4);
+export async function handleCheckAvailability(accountId: string, args?: any): Promise<string> {
+  const format = normMeetingFormat(args?.meeting_format) ?? "both";
+  const slots = await getAvailableSlots(accountId, format, new Date(), 4);
   if (!slots.length) return "No open slots in the next two weeks. Offer to follow up by email instead.";
   const lines = slots.map((s, i) => `${i + 1}. ${s.label}  [start=${s.startIso}]`);
   return (
@@ -109,8 +120,12 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
   const rawStart = args?.start;
   if (!rawStart) return "Missing the slot start. Call check_availability first, then book with the exact start value.";
 
+  // The format the caller chose (only meaningful when the client offers both); otherwise the account's
+  // own mode decides inside bookSlot.
+  const format = normMeetingFormat(args?.meeting_format) ?? "both";
+
   // Re-validate against current availability (match by instant, tolerant of ISO format drift).
-  const open = await getAvailableSlots(ctx.accountId, new Date(), 12);
+  const open = await getAvailableSlots(ctx.accountId, format, new Date(), 12);
   const slot = open.find((s) => Date.parse(s.startIso) === Date.parse(rawStart));
   if (!slot) {
     const alt = open.slice(0, 3).map((s) => s.label).join("; ");
@@ -118,7 +133,7 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
   }
 
   const who = { name: args.name ?? null, company: args.company ?? null, phone: args.phone ?? null, notes: args.notes ?? null, email: args.email ?? null };
-  const r = await bookSlot(ctx.accountId, slot.startIso, who);
+  const r = await bookSlot(ctx.accountId, slot.startIso, who, format);
 
   // Attach to a lead — resolving/creating one for inbound callers who have no lead_id in metadata.
   const leadId = await ensureLead(ctx.accountId, ctx, args.name);
@@ -129,7 +144,7 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
     account_id: ctx.accountId,
     lead_id: leadId,
     meeting_at: slot.startIso,
-    meeting_type: "google_meet",
+    meeting_type: r.format,
     meeting_link: r.meetingLink,
     google_event_id: r.eventId,
     status: "open",
@@ -144,12 +159,21 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
     catch (e: any) { console.error("[tools] cancel old booking failed:", e?.message ?? e); }
   }
 
-  // Fire the booking alert (Slack). Never let a notification failure break the booking.
+  // Fire the booking alerts. Never let a notification failure break the booking.
   const prospect = who.name || who.company || who.phone || "prospect";
   try { await notifyBookingCreated(ctx.accountId, prospect, r.label, r.meetingLink); }
-  catch (e: any) { console.error("[tools] booking notification failed:", e?.message ?? e); }
+  catch (e: any) { console.error("[tools] booking Slack notification failed:", e?.message ?? e); }
+  // Email confirmations (+ .ics) to the client and, if we have it, the customer.
+  try {
+    await notifyBookingEmails(ctx.accountId, {
+      startIso: slot.startIso, meetingLabel: r.label, durationMin: r.durationMin,
+      format: r.format, meetingLink: r.meetingLink, address: r.address,
+      customerName: who.name, customerEmail: who.email,
+    });
+  } catch (e: any) { console.error("[tools] booking email failed:", e?.message ?? e); }
 
-  return `Booked for ${r.label}. Confirm the day and time with the prospect and let them know the invite + link is on the way.`;
+  const where = r.format === "in_person" ? "the address" : "the join link";
+  return `Booked for ${r.label}. Confirm the day and time with the prospect and let them know the confirmation email with ${where} is on the way.`;
 }
 
 // Add the caller to the do-not-call list mid-call (TCPA compliance). Without this, a "stop calling me"
@@ -206,9 +230,19 @@ export async function handleCaptureFields(args: any, ctx: CallContext): Promise<
     ...(notes ? { notes } : {}),
     captured_at: new Date().toISOString(),
   };
+  // Merge onto any existing captures — a second capture_fields in the same call must not wipe the first.
+  // ponytail: read-then-merge, safe because captures within a call run sequentially (handler awaits each).
+  // If captures ever go concurrent, switch to an atomic jsonb `||` merge via RPC.
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("captured_data")
+    .eq("id", leadId)
+    .eq("account_id", ctx.accountId)
+    .single();
+  const merged = { ...(existing?.captured_data ?? {}), ...payload };
   const { error } = await supabase
     .from("leads")
-    .update({ captured_data: payload })
+    .update({ captured_data: merged })
     .eq("id", leadId)
     .eq("account_id", ctx.accountId);
   if (error) return `Couldn't save the answers (${error.message}). Continue the conversation; it can be retried.`;
@@ -226,8 +260,14 @@ export function toolDefs(url: string): Record<string, any> {
       type: "function",
       function: {
         name: "check_availability",
-        description: "Get open meeting slots to offer the prospect. Call this the moment the prospect agrees to a meeting, before booking.",
-        parameters: { type: "object", properties: {}, required: [] },
+        description: "Get open meeting slots to offer the prospect. Call this the moment the prospect agrees to a meeting, before booking. If the business offers both in-person and online meetings, first ask which they want, then pass it as meeting_format.",
+        parameters: {
+          type: "object",
+          properties: {
+            meeting_format: { type: "string", enum: ["in_person", "online"], description: "Only when the business offers both: the format the prospect chose. Omit otherwise." },
+          },
+          required: [],
+        },
       },
       server: { url },
     },
@@ -243,7 +283,8 @@ export function toolDefs(url: string): Record<string, any> {
             name: { type: "string", description: "Prospect's name" },
             company: { type: "string", description: "Prospect's company" },
             phone: { type: "string", description: "Prospect's phone number" },
-            email: { type: "string", description: "Prospect's email address — used to send them a calendar invite" },
+            email: { type: "string", description: "Prospect's email address — used to send them the confirmation + calendar invite" },
+            meeting_format: { type: "string", enum: ["in_person", "online"], description: "Only when the business offers both: the format the prospect chose. Omit otherwise." },
             notes: { type: "string", description: "Anything useful for the meeting" },
           },
           required: ["start"],
@@ -304,7 +345,7 @@ export async function handleToolCalls(body: any): Promise<{ results: { toolCallI
     let result: string;
     try {
       if (!accountId) result = "Could not identify which account this call is for — cannot run this action. Apologize and flag for support.";
-      else if (c.name === "check_availability") result = await handleCheckAvailability(accountId);
+      else if (c.name === "check_availability") result = await handleCheckAvailability(accountId, c.args);
       else if (c.name === "book_appointment") result = await handleBookAppointment(c.args, ctx);
       else if (c.name === "capture_fields") result = await handleCaptureFields(c.args, ctx);
       else if (c.name === "opt_out_customer") result = await handleOptOut(c.args, ctx);

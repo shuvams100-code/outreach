@@ -71,6 +71,22 @@ To maximize attendance rates:
    * A reminder email sent via Resend containing the meeting details and video link.
 2. **24-Hour Nudge Loop:** Once the meeting time passes, if the client has not marked the booking as closed (won/lost/no-show), the system initiates an automated nudge email to the client. This nudge repeats every 24 hours until the client resolves the booking, ensuring the capacity throttle stays accurate.
 
+### E. Booking & Calendar Model (locked 2026-06-30)
+We do **not** depend on per-client calendar integrations (Google/Outlook OAuth). That route needs a token per client, breaks when tokens expire, and excludes anyone not on that provider. Instead:
+
+1. **Own calendar is the source of truth.** Availability windows + bookings live in our own Postgres (`availability_windows`, `bookings`). The agent checks free slots and books against our DB — no external calendar required. (`src/booking.ts` already works this way; `src/calendar.ts` Google sync becomes optional, not required.)
+2. **Confirmations by email — the body is self-sufficient.** On every booking we email both the client (business) and the customer. The **email body carries everything**: date/time and a big clickable **Join** button (virtual) or the **address + map link** (in-person) — the recipient never has to tap anything to get the link. An `.ics` invite is **attached as an optional convenience** for those who want it auto-added to their calendar (Google/Outlook/Apple all import it), but we never rely on the `.ics` — most people don't tap it. *(Email is not built yet: `src/notify.ts` is Slack-only. Needs ONE platform-level email provider (Resend) with one "from" address — not per client.)*
+3. **Meeting link = the client's own reusable room.** For virtual meetings we reuse a permanent link the client gives us once (their Zoom personal room / Meet / Teams). We never generate links (that would need Zoom/Google integration). Per-meeting unique links = optional paid add-on later.
+4. **Meeting mode is per-client: in-person / online / both.** Set at service setup, **required (no default)**.
+   * **in-person only** → agent always books a visit; the **address** goes in the email/`.ics`. The agent is given no link, so it can never offer video.
+   * **online only** → agent always books a video call; the **link** goes in the email/`.ics`. The agent is given no address, so it can never offer a visit.
+   * **both** → the agent asks *"in-person or video?"* and books whichever the customer picks. Only this mode is told to ask. Mode is per individual client, **not** per industry.
+5. **Availability is shared time, not per-format.** One client = one person = one calendar. **Any** booking (online or offline) blocks that slot for **both** formats — the free/busy check never filters bookings by format. Format only scopes the **windows**: a "both" client may offer e.g. in-person 9–12, online 1–5 (default for "both" = both formats, all hours). Checking a slot = *(windows that allow the requested format)* minus *(all bookings, regardless of format)*.
+
+> Optional, never required: a client who wants live two-way Google/Outlook sync can connect it as a premium add-on. The default path above needs **zero** per-client integration.
+
+**Build status (2026-06-30):** all of the above is implemented in the engine. `booking.ts` no longer requires Google (own DB is the source of truth; Google sync is best-effort). `computeFreeSlots` is format- and window-aware with the shared-time rule; `book_appointment`/`check_availability` take a `meeting_format`; the agent prompt gets the per-client meeting-mode line (`meetingModeInstruction`). Booking confirmation **email + `.ics`** is built in `notify.ts` (`notifyBookingEmails`) and fires on booking — it self-skips until `RESEND_API_KEY` + `EMAIL_FROM` are set. Config (`meeting_mode`, `address`, format-scoped `windows`) lives in the account's `booking` jsonb — no migration needed. The Step-2 UI to set these, and inbound customer-email capture, are still to wire.
+
 ---
 
 ## 5. Technology Stack
@@ -80,7 +96,7 @@ To maximize attendance rates:
 * **Database & Auth:** Supabase + PostgreSQL with Row-Level Security (RLS)
 * **Telephony & Agent Orchestration:** VAPI (unified voice agent platform)
 * **Text-to-Speech:** Deepgram Aura-2 / Cartesia Sonic (Voice: 11labs `TX3LPaxmHKxFdv7VOQHJ`)
-* **Booking Integration:** Google Calendar API (configured with per-account OAuth credentials)
+* **Booking:** Own in-system calendar — availability windows + bookings in Postgres (`src/booking.ts`). Confirmations via email + `.ics` invite, which any calendar (Google/Outlook/Apple) imports. Per-account Google Calendar sync is **optional**, not required. *(See §4E.)*
 * **Notifications:** Slack Webhooks + Resend Email API
 * **Billing System:** Dodo Payments (webhook-based activation)
 * **Enrichment LLM (Scraping Pipe only):** OpenRouter Free LLM (`openai/gpt-oss-120b:free`) + Tavily
@@ -106,5 +122,5 @@ To maximize attendance rates:
 1. **Engine Core:** Outbound calls via VAPI assistant config (`src/call.ts`) and outcome classification (`src/outcome.ts`). *(Core logic built; integration with booking is pending).*
 2. **Ingestion & Compliance:** CSV Upload with E.164 normalization, timezone lookup, and DNC matching (`src/upload.ts` & `src/compliance.ts`). *(Built and verified).*
 3. **Outbound Daily Scheduler:** Priority retry/fresh list generator and timezone calling window validator (`src/daily.ts`). *(Built and verified).*
-4. **Google Calendar Booking & Nudge System:** Fetch busy slots, create calendar events, send Slack/Resend notifications, run the 1-hour reminders, and the 24-hour unclosed meeting nudge loop. *(Pending)*.
+4. **Own-Calendar Booking & Nudge System:** Compute free slots from availability windows minus all bookings (shared time across formats, see §4E), book into our DB, send email + `.ics` confirmations to client and customer, run the 1-hour reminders and the 24-hour unclosed-meeting nudge loop. Email provider (Resend) still to be wired — `notify.ts` is Slack-only today. *(Pending)*.
 5. **Inbound Webhook Routing:** Listen for VAPI inbound call webhooks and boot up the correct account's voice assistant dynamically. *(Pending)*.
