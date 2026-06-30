@@ -430,6 +430,11 @@ export default function Home() {
   const [scrapeRadius, setScrapeRadius] = useState("10");
   const [scrapeBusinessType, setScrapeBusinessType] = useState("");
   
+  // Lead Qualification (service 3): the questions to ask + what counts as qualified + recruitment toggle.
+  const [qualifyingQuestions, setQualifyingQuestions] = useState([""]);
+  const [qualifiedCriteria, setQualifiedCriteria] = useState("");
+  const [recruitmentEnabled, setRecruitmentEnabled] = useState(false); // only meaningful in Qualify mode → reveals booking
+
   // Section 4: Offer & Knowledge
   const [clientOffer, setClientOffer] = useState("");
   const [knowledgeBase, setKnowledgeBase] = useState("");
@@ -817,7 +822,9 @@ Always handle objections politely.`;
   };
 
   const handleActivateService = () => {
-    if (!meetingMode) return; // required check
+    // Lead Qualification (capture-only) needs no meeting; it does once recruitment screening is on.
+    const needsMeeting = !(configuringService === "Lead Qualification" && !recruitmentEnabled);
+    if (needsMeeting && !meetingMode) return; // required check
     const c = onboardedClient;
     if (!c) return;
 
@@ -830,6 +837,7 @@ Always handle objections politely.`;
       icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
       clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
       meetingLength, meetingBuffer, bookingCapacity,
+      qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
       phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
@@ -860,6 +868,7 @@ Always handle objections politely.`;
       icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
       clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
       meetingLength, meetingBuffer, bookingCapacity,
+      qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
       phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
@@ -884,7 +893,9 @@ Always handle objections politely.`;
 
   const handleConfigureService = (serviceId) => {
     setConfiguringService(serviceId);
-    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals") {
+    // Lead-qual fields reset clean on every open; saved/defaults override below.
+    setQualifyingQuestions([""]); setQualifiedCriteria(""); setRecruitmentEnabled(false);
+    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals" || serviceId === "Lead Qualification") {
       const saved = onboardedClient?.serviceConfigs?.[serviceId];
       if (saved) {
         setScriptVariant(saved.scriptVariant || (serviceId === "Reactivation & Renewals" ? "db_reactivation" : "default"));
@@ -922,6 +933,34 @@ Always handle objections politely.`;
         setScrapeSources(saved.scrapeSources || ["Google Maps", "Yellow Pages", "Hotfrog"]);
         setMaxCallLength(saved.maxCallLength || "5");
         setMaxLeadsPerRun(saved.maxLeadsPerRun || "100");
+        setQualifyingQuestions(saved.qualifyingQuestions?.length ? saved.qualifyingQuestions : [""]);
+        setQualifiedCriteria(saved.qualifiedCriteria || "");
+        setRecruitmentEnabled(saved.recruitmentEnabled || false);
+      } else if (serviceId === "Lead Qualification") {
+        // No saved config yet — qualification defaults (capture-only). Questions/criteria start empty.
+        setScriptVariant("default");
+        setScriptText("You are calling to qualify prospects for the business described in your context. Ask the qualifying questions naturally, one at a time. Once you've gathered the answers, call capture_fields to save them along with whether the prospect is a good fit (qualified true or false). Be efficient and respectful of their time.");
+        setOpeningLine("Hi, this is the team — do you have a quick minute?");
+        setSuccessMetric("Qualification answers captured for every reachable lead.");
+        setVoiceSelection("default");
+        setModelSelection("gpt-4o-mini");
+        setIcpDescription("");
+        setIsUploadListChecked(true);
+        setIsScrapeChecked(false);
+        setScrapeCity(""); setScrapeState(""); setScrapeRadius("10"); setScrapeBusinessType("");
+        setClientOffer("");
+        setKnowledgeBase("");
+        setAttachedDocuments([]);
+        setMeetingMode(""); setMeetingLink(""); setMeetingAddress("");
+        setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
+        setMeetingLength("30"); setMeetingBuffer("15"); setBookingCapacity("20");
+        setPhoneNumbers([{ number: "", cap: 40 }]);
+        setCallingHoursStart("09:00"); setCallingHoursEnd("18:00");
+        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+        setMaxCallAttempts("3"); setRetryGapDays("3"); setDailyCapPerNumber("40");
+        setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
+        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxCallLength("5"); setMaxLeadsPerRun("100");
       } else if (onboardedClient?.id === "acc_Harbor") {
         if (serviceId === "Outbound Sales / Appt Setting") {
           setScriptVariant("appointment_setting");
@@ -4091,8 +4130,8 @@ Always handle objections politely.`;
             )}
 
             {configuringService ? (
-              (configuringService === "Outbound Sales / Appt Setting" || configuringService === "Reactivation & Renewals") ? (
-                /* Configuration Form for Outbound Sales */
+              (configuringService === "Outbound Sales / Appt Setting" || configuringService === "Reactivation & Renewals" || configuringService === "Lead Qualification") ? (
+                /* Configuration Form — shared by Outbound Sales, Reactivation, and Lead Qualification */
                 <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
                   
                   {/* Section 3: Who it calls */}
@@ -4185,7 +4224,7 @@ Always handle objections politely.`;
                                           </label>
                                           {!hasLeadGen && (
                                             <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
-                                              Enable the Lead Generation service for this client to use scraping.
+                                              You need to create a Lead Generation service for this client first to start scraping.
                                             </span>
                                           )}
                                         </div>
@@ -4264,15 +4303,105 @@ Always handle objections politely.`;
                     );
                   })()}
 
+                  {/* Section: Qualifying Questions (Lead Qualification only) */}
+                  {configuringService === "Lead Qualification" && (() => {
+                    const QUALIFY_PROMPT = "You are calling to qualify prospects for the business described in your context. Ask the qualifying questions naturally, one at a time. Once you've gathered the answers, call capture_fields to save them along with whether the prospect is a good fit (qualified true or false). Be efficient and respectful of their time.";
+                    const SURVEY_PROMPT = "You are running a short survey on behalf of the business described in your context. Read the questions naturally, one at a time, without leading the respondent. Record each answer with capture_fields exactly as given. Stay neutral — you're gathering research, not selling. Thank them for their time at the end.";
+                    const RECRUIT_PROMPT = "You are screening job candidates for the business described in your context. Ask the screening questions one at a time and capture the answers with capture_fields, marking whether the candidate meets the basic criteria (qualified true or false). If they're a fit and interested, call check_availability and book_appointment to schedule an interview. Be respectful and encouraging.";
+                    const isSurvey = scriptVariant === "survey";
+                    const isConfigured = qualifyingQuestions.some(q => q.trim() !== "") && (isSurvey || qualifiedCriteria.trim() !== "");
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>2. Qualifying Questions</span>
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: isConfigured ? "#22C55E" : "#D97706", background: isConfigured ? "#ECFDF5" : "#FFF7ED", padding: "2px 8px", borderRadius: "6px" }}>{isConfigured ? "Configured ✓" : "Needs input"}</span>
+                        </div>
+
+                        {/* Qualify vs Survey */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "8px", display: "block" }}>What is this run for?</label>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            {[
+                              { v: "default", label: "Qualify & score", hint: "Decide who's a fit" },
+                              { v: "survey", label: "Survey / Research", hint: "Just collect answers" },
+                            ].map((o) => {
+                              const sel = (o.v === "survey") === isSurvey;
+                              return (
+                                <div key={o.v}
+                                  onClick={() => {
+                                    if (o.v === "survey") { setScriptVariant("survey"); setRecruitmentEnabled(false); setScriptText(SURVEY_PROMPT); }
+                                    else { setScriptVariant("default"); setScriptText(recruitmentEnabled ? RECRUIT_PROMPT : QUALIFY_PROMPT); }
+                                  }}
+                                  style={{ flex: 1, padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: sel ? "2px solid #4F46FF" : "1px solid #ECEEF2", background: sel ? "#F4F5FF" : "#FFFFFF" }}>
+                                  <div style={{ fontSize: "12px", fontWeight: 600, color: sel ? "#4F46FF" : "#1F2433" }}>{o.label}</div>
+                                  <div style={{ fontSize: "10.5px", color: "#8A90A0", marginTop: "2px" }}>{o.hint}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* The questions */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Questions the agent asks</label>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {qualifyingQuestions.map((q, idx) => (
+                              <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                <input
+                                  type="text"
+                                  placeholder={`Question ${idx + 1} — e.g. What's your budget?`}
+                                  value={q}
+                                  onChange={(e) => { const next = [...qualifyingQuestions]; next[idx] = e.target.value; setQualifyingQuestions(next); }}
+                                  style={{ flex: 1, padding: "8px 12px", fontSize: "12px", border: "1px solid #ECEEF2", borderRadius: "8px", outline: "none", color: "#1F2433", fontFamily: "inherit", background: "#FFFFFF" }}
+                                />
+                                {qualifyingQuestions.length > 1 && (
+                                  <button type="button" onClick={() => setQualifyingQuestions(qualifyingQuestions.filter((_, i) => i !== idx))} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: "8px", padding: "8px 10px", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}>&times;</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <button type="button" onClick={() => setQualifyingQuestions([...qualifyingQuestions, ""])} style={{ marginTop: "8px", background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>+ Add question</button>
+                        </div>
+
+                        {/* Qualified criteria — only when scoring */}
+                        {!isSurvey && (
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>What counts as &quot;qualified&quot;?</label>
+                            <textarea
+                              placeholder="e.g. Budget over $5k, decision-maker, ready within 3 months"
+                              value={qualifiedCriteria}
+                              onChange={(e) => setQualifiedCriteria(e.target.value)}
+                              style={{ width: "100%", minHeight: "60px", padding: "10px 12px", fontSize: "12px", border: "1px solid #ECEEF2", borderRadius: "8px", outline: "none", color: "#1F2433", fontFamily: "inherit", background: "#FFFFFF", resize: "vertical" }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Recruitment toggle — only in Qualify mode */}
+                        {!isSurvey && (
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={recruitmentEnabled}
+                              onChange={(e) => { setRecruitmentEnabled(e.target.checked); setScriptText(e.target.checked ? RECRUIT_PROMPT : QUALIFY_PROMPT); }}
+                              style={{ accentColor: "#4F46FF" }}
+                            />
+                            <span><strong>Recruitment screening</strong> — book an interview for qualified leads <span style={{ color: "#8A90A0", fontWeight: 400 }}>(turns on the Meeting section below)</span></span>
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Section 4: Offer & Knowledge */}
                   {(() => {
-                    const isConfigured = clientOffer.trim() !== "" && knowledgeBase.trim() !== "";
+                    const isLeadQual = configuringService === "Lead Qualification";
+                    const isConfigured = (isLeadQual || clientOffer.trim() !== "") && knowledgeBase.trim() !== "";
                     return (
                       <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
                           <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>2. Offer &amp; Knowledge Base</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Detail the pitch proposal and core FAQ content that the agent will discuss.</span>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{isLeadQual ? "3. Knowledge Base" : "2. Offer & Knowledge Base"}</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>{isLeadQual ? "Core info the agent uses to answer questions on the call." : "Detail the pitch proposal and core FAQ content that the agent will discuss."}</span>
                           </div>
                           {isConfigured ? (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
@@ -4285,6 +4414,7 @@ Always handle objections politely.`;
                           )}
                         </div>
 
+                        {!isLeadQual && (
                         <div>
                           <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>The Core Offer / Pitch Hook</label>
                           <input
@@ -4295,6 +4425,7 @@ Always handle objections politely.`;
                             style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
                           />
                         </div>
+                        )}
 
                         <div>
                           <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Knowledge Base (FAQs &amp; Business Info)</label>
@@ -4377,8 +4508,8 @@ Always handle objections politely.`;
                     );
                   })()}
 
-                  {/* Section 5: The meeting */}
-                  {(() => {
+                  {/* Section 5: The meeting — hidden for Lead Qualification unless recruitment screening is on */}
+                  {(configuringService !== "Lead Qualification" || recruitmentEnabled) && (() => {
                     const isModeSelected = meetingMode !== "";
                     const isLinkConfigured = (meetingMode === "Online" || meetingMode === "Both") ? meetingLink.trim() !== "" : true;
                     const isAddressConfigured = (meetingMode === "In-person" || meetingMode === "Both") ? meetingAddress.trim() !== "" : true;
@@ -4756,8 +4887,8 @@ Always handle objections politely.`;
                           </span>
                         </div>
 
-                        {/* Dropdown for Script Variant */}
-                        <div ref={variantRef} style={{ position: "relative" }}>
+                        {/* Dropdown for Script Variant — hidden for Lead Qualification (chosen in the Questions section) */}
+                        <div ref={variantRef} style={{ position: "relative", display: configuringService === "Lead Qualification" ? "none" : "block" }}>
                           <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Script Variant (Preset Selection)</label>
                           <div
                             onClick={() => setIsVariantDropdownOpen(!isVariantDropdownOpen)}
@@ -5309,27 +5440,33 @@ Always handle objections politely.`;
                     >
                       Cancel
                     </button>
+                    {(() => {
+                      // Lead Qualification (capture-only) doesn't need a meeting; it does once recruitment is on.
+                      const canActivate = (configuringService === "Lead Qualification" && !recruitmentEnabled) || !!meetingMode;
+                      return (
                     <button
                       type="button"
-                      disabled={!meetingMode}
+                      disabled={!canActivate}
                       onClick={handleActivateService}
                       style={{
-                        background: meetingMode ? "#22C55E" : "#CBD2DD",
+                        background: canActivate ? "#22C55E" : "#CBD2DD",
                         color: "#FFFFFF",
                         border: "none",
                         borderRadius: "10px",
                         padding: "10px 20px",
                         fontSize: "13px",
                         fontWeight: 600,
-                        cursor: meetingMode ? "pointer" : "not-allowed",
+                        cursor: canActivate ? "pointer" : "not-allowed",
                         fontFamily: "inherit",
                         transition: "background 150ms ease"
                       }}
-                      onMouseEnter={(e) => { if (meetingMode) e.currentTarget.style.background = "#16A34A"; }}
-                      onMouseLeave={(e) => { if (meetingMode) e.currentTarget.style.background = "#22C55E"; }}
+                      onMouseEnter={(e) => { if (canActivate) e.currentTarget.style.background = "#16A34A"; }}
+                      onMouseLeave={(e) => { if (canActivate) e.currentTarget.style.background = "#22C55E"; }}
                     >
                       {onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service"}
                     </button>
+                      );
+                    })()}
                   </div>
 
                 </div>
@@ -5529,6 +5666,21 @@ Always handle objections politely.`;
                                   <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                     {config.scriptText}
                                   </span>
+                                </div>
+                              </div>
+                            ) : (svcId === "Lead Qualification" && config) ? (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Mode</span>
+                                  <span style={{ color: "#1F2433" }}>{config.scriptVariant === "survey" ? "Survey / Research" : "Qualify & score"}{config.recruitmentEnabled ? " + Recruitment (books interview)" : ""}</span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Questions</span>
+                                  <span style={{ color: "#1F2433" }}>{(config.qualifyingQuestions || []).filter(q => q && q.trim()).length} configured</span>
+                                </div>
+                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
+                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.scriptText}</span>
                                 </div>
                               </div>
                             ) : (

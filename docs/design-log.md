@@ -4,6 +4,17 @@ A running record of every visual/design decision: colors, shapes, components, ty
 
 ---
 
+## 2026-06-30 (Lead Qualification config)
+
+### Service 3 — Lead Qualification config built (reuses the shared form)
+- Extended the shared config form to handle "Lead Qualification" alongside Outbound Sales / Reactivation.
+- **New "Qualifying Questions" section** (lead-qual only): Qualify-vs-Survey segmented choice, add/remove question rows, a "what counts as qualified" box (hidden in Survey mode), and a **Recruitment screening toggle** (Qualify mode only) that reveals the Meeting section + switches the agent to the screening/booking script.
+- **Differences from Outbound:** endings are capture-only (no booking); Offer field hidden; Meeting section hidden unless recruitment is on; success metric = "qualification answers captured"; the Agent&Script variant dropdown is hidden (the qualify/survey choice lives in the Questions section).
+- Activate gating relaxed: lead-qual activates without a meeting (capture-only); requires a meeting only when recruitment is on. New fields persist in `serviceConfigs` and load back; the active-service summary shows mode / question count / script preview.
+- Maps to `accounts.qualifying_questions` (mock for now). Build ✓, eslint 0 errors.
+
+---
+
 ## 2026-06-30 (B2B/B2C gate)
 
 ### Target-customer-type field gates scraping + enrichment (legal)

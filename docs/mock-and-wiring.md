@@ -48,6 +48,8 @@ Today the **entire frontend is mock** — no screen talks to Supabase or the bac
 | 🟢→🔴 Endings (check avail / book / opt-out) | shown locked (correct) | come from the preset's `enabled_tools` | `presets.ts` `enabled_tools` |
 | 🟡 Target customer type (B2B/B2C) | collected at onboarding (local), **but backend guard is REAL** | persist the choice to `accounts.target_customer_type` (column added) | `accounts.target_customer_type` |
 | 🔴 ICP | local text | `accounts.icp_description` (also drives search terms) | `accounts`, `icp.ts deriveSearchTerm` |
+| 🔴 Lead Qualification — questions + qualified criteria | local state | persist to `accounts.qualifying_questions` (jsonb) | `accounts.qualifying_questions` |
+| 🔴 Lead Qualification — recruitment toggle | local; reveals booking + switches script | maps to `lead_qualification` + `recruitment_screening` variant (capture + book) via `applyPreset` | `presets.ts` SCRIPT_VARIANTS |
 | 🔴 Lead source (scrape / upload) | single toggle, no gating | **multi-select**, and **Scrape gated on the client having an active Lead Generation service**; upload always on | services state; `accounts.scraping_enabled` |
 | 🔴 Scrape targeting (City/State/Radius/Business type) | inputs only | `accounts.geo_city`, `geo_state`, `geo_radius_km`, `business_type`, `search_query` | `accounts` |
 | 🔴 List upload | n/a (placeholder) | upload CSV → ingest leads | `upload.ts`, Supabase Storage |
