@@ -834,13 +834,47 @@ Always handle objections politely.`;
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
       enrichEnabled, enrichmentDepth, scrapeSources,
-      maxCallLength, maxLeadsPerRun
+      maxCallLength, maxLeadsPerRun,
+      isDraft: false
     };
 
     const updated = {
       ...c,
       activeServices: updatedActive,
       services: Array.from(new Set([...(c.services || []), configuringService])),
+      serviceConfigs
+    };
+    setClients(prev => prev.map(x => x.id === c.id ? updated : x));
+    setOnboardedClient(updated);
+    setConfiguringService(null);
+  };
+
+  const handleSaveDraft = () => {
+    const c = onboardedClient;
+    if (!c) return;
+
+    // Clone, don't mutate the existing state object.
+    const serviceConfigs = { ...(c.serviceConfigs || {}) };
+    serviceConfigs[configuringService] = {
+      scriptVariant, scriptText, openingLine, successMetric, voiceSelection, modelSelection,
+      icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
+      clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
+      meetingLength, meetingBuffer, bookingCapacity,
+      phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
+      callingHoursStart, callingHoursEnd, callingTimezone,
+      maxCallAttempts, retryGapDays, dailyCapPerNumber,
+      enrichEnabled, enrichmentDepth, scrapeSources,
+      maxCallLength, maxLeadsPerRun,
+      isDraft: true
+    };
+
+    const updatedServices = c.services?.includes(configuringService) ? c.services : [...(c.services || []), configuringService];
+    const updatedActive = (c.activeServices || []).filter(s => s !== configuringService);
+
+    const updated = {
+      ...c,
+      activeServices: updatedActive,
+      services: updatedServices,
       serviceConfigs
     };
     setClients(prev => prev.map(x => x.id === c.id ? updated : x));
@@ -2121,9 +2155,12 @@ Always handle objections politely.`;
                       return displayClients.map((client) => (
                         <tr
                           key={client.id}
+                          onClick={() => { setOnboardedClient(client); setConfiguringService(null); setCurrentView("create-service"); }}
+                          title="Open service setup"
                           style={{
                             borderBottom: "1px solid #F0F1F4",
-                            transition: "background-color 150ms ease"
+                            transition: "background-color 150ms ease",
+                            cursor: "pointer"
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#F9FAFB"}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
@@ -3983,24 +4020,55 @@ Always handle objections politely.`;
                       <span style={{ position: "absolute", top: "2px", left: onboardedClient.enabled === false ? "2px" : "20px", width: "18px", height: "18px", borderRadius: "50%", background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.2)", transition: "left 150ms ease" }} />
                     </button>
                   </div>
-                  {/* ponytail: action wired on user's say-so */}
-                  <button
-                    onClick={() => {
-                      setShowAddServiceModal(true);
-                      setSelectedServiceCategory("");
-                      setModalStep(1);
-                      setSelectedSubService("");
-                    }}
-                    style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, transition: "background 150ms ease" }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#3F37D9"}
-                    onMouseLeave={(e) => e.currentTarget.style.background = "#4F46FF"}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    Add Service
-                  </button>
+                  {configuringService ? (
+                    <button
+                      onClick={handleSaveDraft}
+                      style={{
+                        background: "#FFFBEB",
+                        color: "#D97706",
+                        border: "1px solid #FCD34D",
+                        borderRadius: "10px",
+                        padding: "9px 16px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        flexShrink: 0,
+                        transition: "all 150ms ease"
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF3C7"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFBEB"; }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                        <polyline points="17 21 17 13 7 13 7 21" />
+                        <polyline points="7 3 7 8 15 8" />
+                      </svg>
+                      Save as Draft
+                    </button>
+                  ) : (
+                    /* ponytail: action wired on user's say-so */
+                    <button
+                      onClick={() => {
+                        setShowAddServiceModal(true);
+                        setSelectedServiceCategory("");
+                        setModalStep(1);
+                        setSelectedSubService("");
+                      }}
+                      style={{ background: "#4F46FF", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "9px 16px", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, transition: "background 150ms ease" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#3F37D9"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "#4F46FF"}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      Add Service
+                    </button>
+                  )}
                 </div>
 
                 {/* Status / meta line — pulled left so the first pill's text aligns with the title/breadcrumb */}
@@ -4049,76 +4117,96 @@ Always handle objections politely.`;
                         </div>
 
                         {/* ICP Description Textarea */}
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Ideal Customer Profile (ICP) Description</label>
-                          <textarea
-                            placeholder="e.g. Dental clinics, roofers, HVAC companies in Austin, TX..."
-                            value={icpDescription}
-                            onChange={(e) => setIcpDescription(e.target.value)}
-                            style={{
-                              width: "100%",
-                              minHeight: "70px",
-                              padding: "10px 12px",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                              color: "#1F2433",
-                              fontFamily: "inherit",
-                              resize: "vertical",
-                              outline: "none"
-                            }}
-                          />
-                          <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>
-                            Search terms and scraping keywords will auto-generate from this text description.
-                          </p>
-                        </div>
-
-                        {/* Checkboxes for Lead Source */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source</label>
-                          
-                          {/* Checkbox 1: Upload a list */}
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}>
-                            <input
-                              type="checkbox"
-                              disabled={configuringService === "Reactivation & Renewals"}
-                              checked={isUploadListChecked}
-                              onChange={(e) => setIsUploadListChecked(e.target.checked)}
-                              style={{ accentColor: "#4F46FF", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}
-                            />
-                            <span>Upload a list (CSV file)</span>
-                          </label>
-
-                          {/* Checkbox 2: Scrape / find leads */}
-                          {configuringService !== "Reactivation & Renewals" && (() => {
-                            const isBusiness = onboardedClient?.targetCustomerType === "business";
-                            const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
-                            const isScrapeEnabled = isBusiness && hasLeadGen;
-                            return (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: isScrapeEnabled ? "#1F2433" : "#A0A6B4", cursor: isScrapeEnabled ? "pointer" : "not-allowed" }}>
-                                  <input
-                                    type="checkbox"
-                                    disabled={!isScrapeEnabled}
-                                    checked={isScrapeChecked && isScrapeEnabled}
-                                    onChange={(e) => setIsScrapeChecked(e.target.checked)}
-                                    style={{ accentColor: "#4F46FF", cursor: isScrapeEnabled ? "pointer" : "not-allowed" }}
-                                  />
-                                  <span>Scrape / find leads</span>
+                        {(() => {
+                          const isBusiness = onboardedClient?.targetCustomerType === "business";
+                          return (
+                            <>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>
+                                  {isBusiness ? "Ideal Customer Profile (ICP) Description" : "Target Audience / Demographic Description"}
                                 </label>
-                                {!isBusiness ? (
-                                  <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
-                                    Scraping is only for B2B clients — this client sells to consumers, so leads must be uploaded.
-                                  </span>
-                                ) : !hasLeadGen && (
-                                  <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
-                                    Enable the Lead Generation service for this client to use scraping.
-                                  </span>
+                                <textarea
+                                  placeholder={isBusiness ? "e.g. Dental clinics, roofers, HVAC companies in Austin, TX..." : "e.g. Past retail customers, homeowners who requested a roofing quote..."}
+                                  value={icpDescription}
+                                  onChange={(e) => setIcpDescription(e.target.value)}
+                                  style={{
+                                    width: "100%",
+                                    minHeight: "70px",
+                                    padding: "10px 12px",
+                                    border: "1px solid #ECEEF2",
+                                    borderRadius: "8px",
+                                    fontSize: "13px",
+                                    color: "#1F2433",
+                                    fontFamily: "inherit",
+                                    resize: "vertical",
+                                    outline: "none"
+                                  }}
+                                />
+                                <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>
+                                  {isBusiness 
+                                    ? "Search terms and scraping keywords will auto-generate from this text description." 
+                                    : "This helps the AI agent understand who it is calling and tailor its conversation style."
+                                  }
+                                </p>
+                              </div>
+
+                              {/* Checkboxes for Lead Source */}
+                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source</label>
+                                
+                                {isBusiness ? (
+                                  <>
+                                    {/* Checkbox 1: Upload a list */}
+                                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}>
+                                      <input
+                                        type="checkbox"
+                                        disabled={configuringService === "Reactivation & Renewals"}
+                                        checked={isUploadListChecked || configuringService === "Reactivation & Renewals"}
+                                        onChange={(e) => setIsUploadListChecked(e.target.checked)}
+                                        style={{ accentColor: "#4F46FF", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}
+                                      />
+                                      <span>Upload a list (CSV file)</span>
+                                    </label>
+
+                                    {/* Checkbox 2: Scrape / find leads */}
+                                    {configuringService !== "Reactivation & Renewals" && (() => {
+                                      const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
+                                      return (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasLeadGen ? "#1F2433" : "#A0A6B4", cursor: hasLeadGen ? "pointer" : "not-allowed" }}>
+                                            <input
+                                              type="checkbox"
+                                              disabled={!hasLeadGen}
+                                              checked={isScrapeChecked && hasLeadGen}
+                                              onChange={(e) => setIsScrapeChecked(e.target.checked)}
+                                              style={{ accentColor: "#4F46FF", cursor: hasLeadGen ? "pointer" : "not-allowed" }}
+                                            />
+                                            <span>Scrape / find leads</span>
+                                          </label>
+                                          {!hasLeadGen && (
+                                            <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
+                                              Enable the Lead Generation service for this client to use scraping.
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </>
+                                ) : (
+                                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433" }}>
+                                    <input
+                                      type="checkbox"
+                                      checked
+                                      disabled
+                                      style={{ accentColor: "#4F46FF", cursor: "not-allowed" }}
+                                    />
+                                    <span style={{ color: "#5A6072" }}>Upload a list (Consumer B2C calls require uploading a custom contact list)</span>
+                                  </label>
                                 )}
                               </div>
-                            );
-                          })()}
-                        </div>
+                            </>
+                          );
+                        })()}
 
                         {isScrapeChecked && (onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation")) && (
                           <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
@@ -5292,7 +5380,12 @@ Always handle objections politely.`;
                                 <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{svcId}</span>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                {isActive ? (
+                                {config?.isDraft ? (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "2px 8px", borderRadius: "6px" }}>
+                                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#D97706" }} />
+                                    Draft
+                                  </span>
+                                ) : isActive ? (
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#10B981", background: "#E6FDF4", padding: "2px 8px", borderRadius: "6px" }}>
                                     <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10B981" }} />
                                     Active
@@ -5314,7 +5407,14 @@ Always handle objections politely.`;
                                       if (c) {
                                         const active = c.activeServices || [];
                                         const updatedActive = [...active, svcId];
-                                        const updated = { ...c, activeServices: updatedActive };
+                                        const serviceConfigs = { ...(c.serviceConfigs || {}) };
+                                        if (serviceConfigs[svcId]) {
+                                          serviceConfigs[svcId] = {
+                                            ...serviceConfigs[svcId],
+                                            isDraft: false
+                                          };
+                                        }
+                                        const updated = { ...c, activeServices: updatedActive, serviceConfigs };
                                         setClients(prev => prev.map(x => x.id === c.id ? updated : x));
                                         setOnboardedClient(updated);
                                       }
