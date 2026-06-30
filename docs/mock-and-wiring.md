@@ -50,7 +50,7 @@ Today the **entire frontend is mock** — no screen talks to Supabase or the bac
 | 🔴 ICP | local text | `accounts.icp_description` (also drives search terms) | `accounts`, `icp.ts deriveSearchTerm` |
 | 🔴 Lead Qualification — questions + qualified criteria | local state | persist to `accounts.qualifying_questions` (jsonb) | `accounts.qualifying_questions` |
 | 🔴 Lead Qualification — recruitment toggle | local; reveals booking + switches script | maps to `lead_qualification` + `recruitment_screening` variant (capture + book) via `applyPreset` | `presets.ts` SCRIPT_VARIANTS |
-| 🔴 Lead source (scrape / upload) | single toggle, no gating | **multi-select**, and **Scrape gated on the client having an active Lead Generation service**; upload always on | services state; `accounts.scraping_enabled` |
+| 🔴 Lead source (scrape / upload) | multi-select; **Scrape disabled unless the client has an active Lead Generation service AND is B2B** (UI gate, centralized in the shared form → applies to every service) | upload always on; engine already guards B2B. **Add engine guard:** also refuse scrape if the account has no active lead-gen service (not just B2B) | services state; `accounts.scraping_enabled`; `scrape.ts` |
 | 🔴 Scrape targeting (City/State/Radius/Business type) | inputs only | `accounts.geo_city`, `geo_state`, `geo_radius_km`, `business_type`, `search_query` | `accounts` |
 | 🔴 List upload | n/a (placeholder) | upload CSV → ingest leads | `upload.ts`, Supabase Storage |
 | 🔴 Offer | local text | `accounts.offer` | `accounts` |

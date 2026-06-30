@@ -18,6 +18,8 @@ const INITIAL_CLIENTS = [
     color: "#0F172A",
     leads: "210 Ready Leads",
     services: ["Do Everything (Full Funnel)", "Lead Generation"],
+    activeServices: ["Lead Generation"], // demo: Harbor has actually created a Lead Generation service → scraping unlocked
+    serviceConfigs: { "Lead Generation": { isDraft: false } },
     health: "Operational",
     retainer: "$5,000.00",
     payment: "Paid",
@@ -4209,7 +4211,8 @@ Always handle objections politely.`;
 
                                     {/* Checkbox 2: Scrape / find leads */}
                                     {configuringService !== "Reactivation & Renewals" && (() => {
-                                      const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation");
+                                      // Only an actually-created, active Lead Generation service unlocks scraping — not a mock display tag.
+                                      const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation");
                                       return (
                                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                           <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasLeadGen ? "#1F2433" : "#A0A6B4", cursor: hasLeadGen ? "pointer" : "not-allowed" }}>
