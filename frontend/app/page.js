@@ -1604,28 +1604,6 @@ Always handle objections politely.`;
                             strokeLinejoin="round"
                           />
 
-                          {/* Active Dot Indicators */}
-                          {hoveredIdx !== null && (
-                            <>
-                              <circle
-                                cx={xCoords[hoveredIdx]}
-                                cy={revenue[hoveredIdx]}
-                                r="4.5"
-                                fill="#FFFFFF"
-                                stroke="#4F46FF"
-                                strokeWidth="2.5"
-                              />
-                              <circle
-                                cx={xCoords[hoveredIdx]}
-                                cy={cost[hoveredIdx]}
-                                r="4.5"
-                                fill="#FFFFFF"
-                                stroke="#A8AEBC"
-                                strokeWidth="2.5"
-                              />
-                            </>
-                          )}
-
                           {/* Invisible hover rectangles */}
                           {xCoords.map((x, idx) => (
                             <rect
@@ -1640,6 +1618,42 @@ Always handle objections politely.`;
                             />
                           ))}
                         </svg>
+
+                        {/* Active Dot Indicators (HTML to prevent stretching) */}
+                        {hoveredIdx !== null && (
+                          <>
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${(xCoords[hoveredIdx] / 540) * 100}%`,
+                                top: `${(revenue[hoveredIdx] / 150) * 100}%`,
+                                transform: "translate(-50%, -50%)",
+                                width: "11px",
+                                height: "11px",
+                                borderRadius: "50%",
+                                backgroundColor: "#FFFFFF",
+                                border: "2.5px solid #4F46FF",
+                                pointerEvents: "none",
+                                zIndex: 10
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${(xCoords[hoveredIdx] / 540) * 100}%`,
+                                top: `${(cost[hoveredIdx] / 150) * 100}%`,
+                                transform: "translate(-50%, -50%)",
+                                width: "11px",
+                                height: "11px",
+                                borderRadius: "50%",
+                                backgroundColor: "#FFFFFF",
+                                border: "2.5px solid #A8AEBC",
+                                pointerEvents: "none",
+                                zIndex: 10
+                              }}
+                            />
+                          </>
+                        )}
 
                         {/* Hover Tooltip Overlay */}
                         {hoveredIdx !== null && (
@@ -2494,30 +2508,6 @@ Always handle objections politely.`;
                               strokeLinecap="round"
                             />
 
-                            {/* Active Dots on Hover */}
-                            {revenueHoveredIdx !== null && (
-                              <>
-                                <circle
-                                  cx={xCoords[revenueHoveredIdx]}
-                                  cy={revenue[revenueHoveredIdx]}
-                                  r="6"
-                                  fill="#4F46FF"
-                                  stroke="#FFFFFF"
-                                  strokeWidth="2"
-                                  style={{ filter: "drop-shadow(0px 2px 4px rgba(79, 70, 255, 0.4))" }}
-                                />
-                                <circle
-                                  cx={xCoords[revenueHoveredIdx]}
-                                  cy={cost[revenueHoveredIdx]}
-                                  r="6"
-                                  fill="#F59E0B"
-                                  stroke="#FFFFFF"
-                                  strokeWidth="2"
-                                  style={{ filter: "drop-shadow(0px 2px 4px rgba(245, 158, 11, 0.4))" }}
-                                />
-                              </>
-                            )}
-
                             {/* Hover Overlay Columns */}
                             {xCoords.map((x, idx) => (
                               <rect
@@ -2532,6 +2522,44 @@ Always handle objections politely.`;
                               />
                             ))}
                           </svg>
+
+                          {/* Active Dots on Hover (HTML to avoid stretching) */}
+                          {revenueHoveredIdx !== null && (
+                            <>
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  left: `${(xCoords[revenueHoveredIdx] / 1000) * 100}%`,
+                                  top: `${(revenue[revenueHoveredIdx] / 150) * 100}%`,
+                                  transform: "translate(-50%, -50%)",
+                                  width: "14px",
+                                  height: "14px",
+                                  borderRadius: "50%",
+                                  backgroundColor: "#4F46FF",
+                                  border: "2px solid #FFFFFF",
+                                  boxShadow: "0px 2px 4px rgba(79, 70, 255, 0.4)",
+                                  pointerEvents: "none",
+                                  zIndex: 5
+                                }}
+                              />
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  left: `${(xCoords[revenueHoveredIdx] / 1000) * 100}%`,
+                                  top: `${(cost[revenueHoveredIdx] / 150) * 100}%`,
+                                  transform: "translate(-50%, -50%)",
+                                  width: "14px",
+                                  height: "14px",
+                                  borderRadius: "50%",
+                                  backgroundColor: "#F59E0B",
+                                  border: "2px solid #FFFFFF",
+                                  boxShadow: "0px 2px 4px rgba(245, 158, 11, 0.4)",
+                                  pointerEvents: "none",
+                                  zIndex: 5
+                                }}
+                              />
+                            </>
+                          )}
 
                           {/* Tooltip Overlay */}
                           {revenueHoveredIdx !== null && (
@@ -4653,7 +4681,15 @@ Always handle objections politely.`;
                                 gap: "4px"
                               }}
                             >
-                              ✨ Generate script
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                              >
+                                <path d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z" />
+                              </svg>
+                              Generate script
                             </button>
                           </div>
                           <textarea
