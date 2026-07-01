@@ -20,7 +20,10 @@ export type Preset = {
 };
 
 const DEFAULT_MODEL = { provider: "openai", model: "gpt-4o-mini" };
-const DEFAULT_VOICE = { provider: "11labs", voiceId: "TX3LPaxmHKxFdv7VOQHJ" };
+// VAPI-native voice (provider "vapi") — confirmed free with just the VAPI account, no 11labs/PlayHT/etc
+// key needed. Locked 2026-07-01: default new accounts to this, not 11labs, since 11labs bills separately
+// and this is meant to run at real outbound volume (tenant-0 dogfooding) before any client is paying.
+const DEFAULT_VOICE = { provider: "vapi", voiceId: "Elliot" };
 const ALL_SOURCES = [
   { key: "google_maps", enabled: true },
   { key: "yellow_pages", enabled: true },
@@ -232,6 +235,7 @@ export type ScriptOverride = {
 
 export type BuildOptions = {
   voiceId?: string;
+  voiceProvider?: string;         // which voice service voiceId belongs to — "vapi" (default, free), "11labs", etc.
   override?: ScriptOverride;      // client's custom script (takes precedence over preset script)
 };
 
@@ -245,7 +249,7 @@ export function buildPresetUpdate(
   presets: (Preset | { key: string; script_variant?: string })[],
   opts?: string | BuildOptions,
 ) {
-  const { voiceId, override } = typeof opts === "string" ? { voiceId: opts, override: undefined } : (opts ?? {});
+  const { voiceId, voiceProvider, override } = typeof opts === "string" ? { voiceId: opts, voiceProvider: undefined, override: undefined } : (opts ?? {});
   // Normalize to Preset objects, resolving each chosen variant into the actual system_prompt.
   const normalized = presets.map((p) => {
     const preset = "system_prompt" in p ? p : PRESETS[p.key];
@@ -292,7 +296,10 @@ export function buildPresetUpdate(
   if (base.system_prompt) {
     base.vapi_assistant = {
       model: { ...DEFAULT_MODEL, messages: [{ role: "system", content: base.system_prompt }] },
-      voice: voiceId ? { provider: "11labs", voiceId } : DEFAULT_VOICE,
+      // Bug fixed 2026-07-01: this used to hardcode provider "11labs" for ANY custom voiceId, which would
+      // silently mis-route a VAPI-native or other-provider voice ID under the wrong provider. Defaults to
+      // "vapi" (matches DEFAULT_VOICE) unless the caller says otherwise.
+      voice: voiceId ? { provider: voiceProvider ?? "vapi", voiceId } : DEFAULT_VOICE,
       firstMessage: base.first_message,
     };
   }

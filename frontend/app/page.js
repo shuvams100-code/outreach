@@ -2,6 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 
+// Real accounts get a Postgres UUID id from the API; the seeded demo clients below (acc_Harbor, etc.)
+// don't exist in the database. This tells the handlers which id to write through to the backend for.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isRealAccountId = (id) => UUID_RE.test(id ?? "");
+
 // ponytail: mock data — swap for Supabase query later
 const INITIAL_CLIENTS = [
   {
@@ -204,6 +209,36 @@ const TIMEFRAME_DATA = {
   }
 };
 
+// VAPI's own native voices — confirmed real via VAPI's API (2026-07-01): free with just the VAPI
+// account, no 11labs/PlayHT/Azure key needed. This is the actual enumerated list VAPI accepts for
+// provider "vapi" — not invented names. "default" maps to DEFAULT_VOICE ("Elliot") in src/presets.ts.
+const VAPI_VOICES = [
+  "Clara", "Godfrey", "Elliot", "Savannah", "Nico", "Kai", "Emma", "Sagar", "Neil", "Layla",
+  "Sid", "Gustavo", "Kylie", "Rohan", "Lily", "Hana", "Neha", "Cole", "Harry", "Paige",
+  "Spencer", "Naina", "Leah", "Tara", "Jess", "Leo", "Dan", "Mia", "Zac", "Zoe",
+];
+
+// Real model choices — confirmed accepted by VAPI's live API 2026-07-01 (not invented names). perMin is
+// an ESTIMATE from VAPI's published pricing page + third-party breakdowns, not a live price feed (VAPI's
+// API has no pricing endpoint) — good enough to compare options, not an exact receipt.
+const VAPI_MODELS = [
+  { key: "gpt-4o-mini", provider: "openai", model: "gpt-4o-mini", label: "GPT-4o-mini", tier: "Cheap", perMin: 0.02 },
+  { key: "gemini-1.5-flash", provider: "google", model: "gemini-1.5-flash", label: "Gemini 1.5 Flash", tier: "Cheap", perMin: 0.02 },
+  { key: "llama-3.3-70b", provider: "groq", model: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Groq)", tier: "Cheap", perMin: 0.01 },
+  { key: "claude-3-5-sonnet", provider: "anthropic", model: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", tier: "Premium", perMin: 0.10 },
+  { key: "gpt-4o", provider: "openai", model: "gpt-4o", label: "GPT-4o", tier: "Premium", perMin: 0.15 },
+];
+const VAPI_PLATFORM_PER_MIN = 0.05; // VAPI's own flat fee, every call, regardless of model/voice
+const STT_PER_MIN = 0.005;          // transcription — a rounding error either way
+const VOICE_PER_MIN = 0;            // every selectable voice today is VAPI-native = bundled/free
+
+// $/minute estimate for a model + voice pick, and a rough $/call using an assumed average call length.
+function estimateCallCost(modelKey, avgCallMinutes = 3) {
+  const m = VAPI_MODELS.find((x) => x.key === modelKey) ?? VAPI_MODELS[0];
+  const perMin = VAPI_PLATFORM_PER_MIN + STT_PER_MIN + m.perMin + VOICE_PER_MIN;
+  return { perMin, perCall: perMin * avgCallMinutes, tier: m.tier };
+}
+
 const TIMEZONE_GROUPS = [
   { label: "North America", zones: [
     { value: "America/New_York", label: "Eastern Time (ET)" },
@@ -343,6 +378,67 @@ function ClientIdentityCell({ client }) {
   );
 }
 
+// Real "buy a phone number" action, used in both the outbound Phone Pool and inbound Number sections.
+// Calls the real VAPI-backed route built 2026-07-01 (POST /api/accounts/[id]/phone-numbers) — this has a
+// REAL cost, so it always requires the user to type an area code and click Confirm; nothing auto-buys.
+// For seeded demo clients (no real account id) it's disabled — there's no account to bill/assign to.
+function BuyPhoneNumberButton({ accountId, onBought }) {
+  const [open, setOpen] = useState(false);
+  const [areaCode, setAreaCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const disabled = !isRealAccountId(accountId);
+
+  const confirm = async () => {
+    if (!/^\d{3}$/.test(areaCode)) { setError("Enter a 3-digit area code, e.g. 512."); return; }
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/phone-numbers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ areaCode }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      onBought(json.number);
+      setOpen(false); setAreaCode("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        title={disabled ? "This client isn't saved yet — onboard them for real first." : "Buy a real phone number (has a real cost)"}
+        onClick={() => setOpen(true)}
+        style={{ width: "fit-content", background: disabled ? "#F1F3F5" : "#ECFDF5", border: `1px dashed ${disabled ? "#CBD2DD" : "#22C55E"}`, color: disabled ? "#A0A6B4" : "#16A34A", borderRadius: "8px", padding: "6px 12px", fontSize: "11px", fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer" }}
+      >
+        + Buy a number
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "6px", background: "#F9FAFB", border: "1px solid #ECEEF2", borderRadius: "8px", padding: "10px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <span style={{ fontSize: "11px", color: "#5A6072" }}>Area code</span>
+        <input
+          type="text" placeholder="512" maxLength={3} value={areaCode}
+          onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, ""))}
+          style={{ width: "60px", padding: "6px 8px", border: "1px solid #ECEEF2", borderRadius: "6px", fontSize: "12px", outline: "none" }}
+        />
+        <button type="button" disabled={busy} onClick={confirm} style={{ background: "#22C55E", color: "#FFFFFF", border: "none", borderRadius: "6px", padding: "6px 12px", fontSize: "11px", fontWeight: 600, cursor: busy ? "not-allowed" : "pointer" }}>
+          {busy ? "Buying..." : "Confirm — buy real number"}
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setError(""); }} style={{ background: "transparent", border: "none", color: "#8A90A0", fontSize: "11px", cursor: "pointer" }}>Cancel</button>
+      </div>
+      {error && <span style={{ fontSize: "11px", color: "#EF4444" }}>{error}</span>}
+      <span style={{ fontSize: "10px", color: "#8A90A0" }}>This buys a real number on your VAPI account — it has a real ongoing cost.</span>
+    </div>
+  );
+}
+
 // Timeframe selector used on both the dashboard "Overall Sales" and revenue "Revenue & Cost" cards.
 // Caller owns the value/open state + the ref (so the existing outside-click handler keeps working).
 function TimeframeDropdown({ value, onChange, open, setOpen, triggerRef }) {
@@ -383,7 +479,18 @@ function TimeframeDropdown({ value, onChange, open, setOpen, triggerRef }) {
 
 export default function Home() {
   const [clients, setClients] = useState(INITIAL_CLIENTS);
-  
+
+  // Load real accounts from the database alongside the seeded demo clients, so anything onboarded for
+  // real is still here after a refresh (it was always saved — this just fetches it back into view).
+  useEffect(() => {
+    fetch("/api/accounts")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok) setClients((prev) => [...INITIAL_CLIENTS, ...json.clients]);
+      })
+      .catch((e) => console.error("[load accounts] failed — showing demo clients only:", e));
+  }, []);
+
   // Onboard New Organization Form State
   const [orgName, setOrgName] = useState("");
   const [orgIndustry, setOrgIndustry] = useState("");
@@ -406,7 +513,10 @@ export default function Home() {
   const [selectedSubService, setSelectedSubService] = useState("");
 
   const [configuringService, setConfiguringService] = useState(null);
-  
+  const [isSavingService, setIsSavingService] = useState(false);
+  const [serviceApiError, setServiceApiError] = useState("");
+  const [apiError, setApiError] = useState("");
+
   // Section 1: Agent & Script states
   const [scriptVariant, setScriptVariant] = useState("default");
   const [isVariantDropdownOpen, setIsVariantDropdownOpen] = useState(false);
@@ -783,12 +893,24 @@ export default function Home() {
   };
 
   // Enable/disable the whole client account (e.g. flip off on non-payment). Status follows from it.
-  const toggleClientEnabled = () => {
+  const toggleClientEnabled = async () => {
     const c = onboardedClient;
     if (!c) return;
     const next = c.enabled === false; // currently disabled → enable; else disable
     setClients(prev => prev.map(x => x.id === c.id ? { ...x, enabled: next } : x));
     setOnboardedClient(prev => prev ? { ...prev, enabled: next } : prev);
+    if (!isRealAccountId(c.id)) return; // seeded demo client — local only
+    try {
+      const res = await fetch(`/api/accounts/${c.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: next }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setClients(prev => prev.map(x => x.id === c.id ? json.client : x));
+      setOnboardedClient(json.client);
+    } catch (e) {
+      console.error("[toggleClientEnabled] failed, reverting:", e);
+      setClients(prev => prev.map(x => x.id === c.id ? { ...x, enabled: !next } : x));
+      setOnboardedClient(prev => prev ? { ...prev, enabled: !next } : prev);
+    }
   };
 
   // Open the onboarding popup pre-filled with the current client, in edit mode.
@@ -805,6 +927,36 @@ export default function Home() {
     setOnboardErrors({});
     setEditingClientId(c.id);
     setShowOnboardModal(true);
+  };
+
+  // Real upload for a real account (Supabase Storage); local-only filename chips for seeded demo
+  // clients (nothing to upload to yet). .txt files get their text pulled straight into the knowledge
+  // base; PDF/DOCX are stored as-is but not parsed yet (no PDF/DOCX text extractor wired up).
+  const handleDocumentUpload = async (fileList) => {
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+    const c = onboardedClient;
+
+    if (!c || !isRealAccountId(c.id)) {
+      setAttachedDocuments(prev => Array.from(new Set([...prev, ...files.map(f => f.name)])));
+      return;
+    }
+
+    for (const file of files) {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`/api/accounts/${c.id}/documents`, { method: "POST", body: form });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+        setAttachedDocuments(prev => Array.from(new Set([...prev, json.name])));
+        if (json.extractedText) {
+          setKnowledgeBase(prev => (prev ? `${prev}\n\n` : "") + `[From ${json.name}]\n${json.extractedText}`);
+        }
+      } catch (e) {
+        setServiceApiError(`Couldn't upload "${file.name}": ${e.message}`);
+      }
+    }
   };
 
   const handleGenerateScript = () => {
@@ -838,35 +990,37 @@ Always handle objections politely.`;
     setScriptText(generated);
   };
 
-  const handleActivateService = () => {
+  // Every field the config screen collects, for whichever service is open. Shared by
+  // handleActivateService/handleSaveDraft (local state) and the real API write-through.
+  const buildServiceConfigPayload = (isDraft) => ({
+    scriptVariant, scriptText, openingLine, successMetric, voiceSelection, modelSelection,
+    icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
+    clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
+    meetingLength, meetingBuffer, bookingCapacity,
+    qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
+    remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
+    inboundNumbers: inboundNumbers.filter(p => p.number.trim() !== ""),
+    coverageMode, warmTransferEnabled, warmTransferNumber, warmTransferHoursStart, warmTransferHoursEnd,
+    phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
+    callingHoursStart, callingHoursEnd, callingTimezone,
+    maxCallAttempts, retryGapDays, dailyCapPerNumber,
+    enrichEnabled, enrichmentDepth, scrapeSources,
+    maxCallLength, maxLeadsPerRun,
+    isDraft,
+  });
+
+  const handleActivateService = async () => {
     // Lead Qualification (without recruitment), Appointment Reminders, and Support Line need no meeting; otherwise required.
     const noMeetingServices = ["Lead Qualification", "Appointment Reminders", "Support / Complaint Line"];
     const needsMeeting = !noMeetingServices.includes(configuringService) || (configuringService === "Lead Qualification" && recruitmentEnabled);
     if (needsMeeting && !meetingMode) return; // required check
     const c = onboardedClient;
     if (!c) return;
+    setServiceApiError("");
 
     const active = c.activeServices || [];
     const updatedActive = active.includes(configuringService) ? active : [...active, configuringService];
-    // Clone, don't mutate the existing state object.
-    const serviceConfigs = { ...(c.serviceConfigs || {}) };
-    serviceConfigs[configuringService] = {
-      scriptVariant, scriptText, openingLine, successMetric, voiceSelection, modelSelection,
-      icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
-      clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
-      meetingLength, meetingBuffer, bookingCapacity,
-      qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
-      remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
-      inboundNumbers: inboundNumbers.filter(p => p.number.trim() !== ""),
-      coverageMode, warmTransferEnabled, warmTransferNumber, warmTransferHoursStart, warmTransferHoursEnd,
-      phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
-      callingHoursStart, callingHoursEnd, callingTimezone,
-      maxCallAttempts, retryGapDays, dailyCapPerNumber,
-      enrichEnabled, enrichmentDepth, scrapeSources,
-      maxCallLength, maxLeadsPerRun,
-      isDraft: false
-    };
-
+    const serviceConfigs = { ...(c.serviceConfigs || {}), [configuringService]: buildServiceConfigPayload(false) };
     const updated = {
       ...c,
       activeServices: updatedActive,
@@ -875,44 +1029,70 @@ Always handle objections politely.`;
     };
     setClients(prev => prev.map(x => x.id === c.id ? updated : x));
     setOnboardedClient(updated);
-    setConfiguringService(null);
+
+    if (!isRealAccountId(c.id)) { setConfiguringService(null); return; } // seeded demo client — local only
+
+    setIsSavingService(true);
+    try {
+      const res = await fetch(`/api/accounts/${c.id}/services`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceKey: configuringService, config: serviceConfigs[configuringService] }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setClients(prev => prev.map(x => x.id === c.id ? json.client : x));
+      setOnboardedClient(json.client);
+      setConfiguringService(null);
+    } catch (e) {
+      // Leave the config screen open with the entered data intact so nothing typed is lost — just show
+      // the error and let the user retry Activate.
+      setServiceApiError(`Couldn't save to the server: ${e.message}. Your changes are still here — try Activate again.`);
+    } finally {
+      setIsSavingService(false);
+    }
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     const c = onboardedClient;
     if (!c) return;
+    setServiceApiError("");
 
-    // Clone, don't mutate the existing state object.
-    const serviceConfigs = { ...(c.serviceConfigs || {}) };
-    serviceConfigs[configuringService] = {
-      scriptVariant, scriptText, openingLine, successMetric, voiceSelection, modelSelection,
-      icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
-      clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
-      meetingLength, meetingBuffer, bookingCapacity,
-      qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
-      remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
-      inboundNumbers: inboundNumbers.filter(p => p.number.trim() !== ""),
-      coverageMode, warmTransferEnabled, warmTransferNumber, warmTransferHoursStart, warmTransferHoursEnd,
-      phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
-      callingHoursStart, callingHoursEnd, callingTimezone,
-      maxCallAttempts, retryGapDays, dailyCapPerNumber,
-      enrichEnabled, enrichmentDepth, scrapeSources,
-      maxCallLength, maxLeadsPerRun,
-      isDraft: true
-    };
-
+    const serviceConfigs = { ...(c.serviceConfigs || {}), [configuringService]: buildServiceConfigPayload(true) };
     const updatedServices = c.services?.includes(configuringService) ? c.services : [...(c.services || []), configuringService];
     const updatedActive = (c.activeServices || []).filter(s => s !== configuringService);
-
-    const updated = {
-      ...c,
-      activeServices: updatedActive,
-      services: updatedServices,
-      serviceConfigs
-    };
+    const updated = { ...c, activeServices: updatedActive, services: updatedServices, serviceConfigs };
     setClients(prev => prev.map(x => x.id === c.id ? updated : x));
     setOnboardedClient(updated);
-    setConfiguringService(null);
+
+    if (!isRealAccountId(c.id)) { setConfiguringService(null); return; }
+
+    setIsSavingService(true);
+    try {
+      const res = await fetch(`/api/accounts/${c.id}/services`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceKey: configuringService, config: serviceConfigs[configuringService], activate: false }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setClients(prev => prev.map(x => x.id === c.id ? json.client : x));
+      setOnboardedClient(json.client);
+      setConfiguringService(null);
+    } catch (e) {
+      setServiceApiError(`Couldn't save the draft to the server: ${e.message}. Your changes are still here — try again.`);
+    } finally {
+      setIsSavingService(false);
+    }
+  };
+
+  // A number just bought belongs to the client's account, not to whichever service was open when it
+  // was bought — remember it there immediately so the NEXT service opened this session sees it too
+  // (handleConfigureService's fetch above covers a fresh load; this covers the same-session case).
+  const recordBoughtNumberOnAccount = (numberId) => {
+    const c = onboardedClient;
+    if (!c) return;
+    const updated = { ...c, vapiPhoneNumberIds: [...new Set([...(c.vapiPhoneNumberIds ?? []), numberId])] };
+    setOnboardedClient(updated);
+    setClients(prev => prev.map(x => x.id === c.id ? updated : x));
   };
 
   const handleConfigureService = (serviceId) => {
@@ -1158,17 +1338,50 @@ Always handle objections politely.`;
         setMaxLeadsPerRun("100");
       }
     }
+
+    // A phone number belongs to the CLIENT, not to one service — pull in any numbers already bought
+    // under a different service so they show here too, instead of starting blank. Real accounts only.
+    const ids = onboardedClient?.vapiPhoneNumberIds;
+    if (isRealAccountId(onboardedClient?.id) && ids?.length) {
+      fetch("/api/vapi/phone-numbers").then((r) => r.json()).then((json) => {
+        if (!json.ok) return;
+        const owned = json.numbers.filter((n) => ids.includes(n.id)).map((n) => n.number);
+        if (!owned.length) return;
+        setPhoneNumbers((prev) => {
+          const have = new Set(prev.map((p) => p.number).filter(Boolean));
+          const add = owned.filter((n) => !have.has(n)).map((n) => ({ number: n, cap: 40 }));
+          return add.length ? [...prev.filter((p) => p.number.trim()), ...add] : prev;
+        });
+        setInboundNumbers((prev) => {
+          const have = new Set(prev.map((p) => p.number).filter(Boolean));
+          const add = owned.filter((n) => !have.has(n)).map((n) => ({ number: n }));
+          return add.length ? [...prev.filter((p) => p.number.trim()), ...add] : prev;
+        });
+      }).catch((e) => console.error("[handleConfigureService] loading account's numbers failed:", e));
+    }
   };
 
-  const handleDeactivateService = (serviceId) => {
+  const handleDeactivateService = async (serviceId) => {
     const c = onboardedClient;
     if (!c) return;
     const updated = { ...c, activeServices: (c.activeServices || []).filter(s => s !== serviceId) };
     setClients(prev => prev.map(x => x.id === c.id ? updated : x));
     setOnboardedClient(updated);
+    if (!isRealAccountId(c.id)) return;
+    try {
+      const res = await fetch(`/api/accounts/${c.id}/services`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serviceKey: serviceId, mode: "off" }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setClients(prev => prev.map(x => x.id === c.id ? json.client : x));
+      setOnboardedClient(json.client);
+    } catch (e) {
+      console.error("[handleDeactivateService] failed, reverting:", e);
+      setClients(prev => prev.map(x => x.id === c.id ? c : x));
+      setOnboardedClient(c);
+    }
   };
 
-  const handleDeleteService = (serviceId) => {
+  const handleDeleteService = async (serviceId) => {
     const c = onboardedClient;
     if (!c) return;
     const serviceConfigs = { ...(c.serviceConfigs || {}) };
@@ -1181,9 +1394,21 @@ Always handle objections politely.`;
     };
     setClients(prev => prev.map(x => x.id === c.id ? updated : x));
     setOnboardedClient(updated);
+    if (!isRealAccountId(c.id)) return;
+    try {
+      const res = await fetch(`/api/accounts/${c.id}/services`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serviceKey: serviceId, mode: "delete" }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setClients(prev => prev.map(x => x.id === c.id ? json.client : x));
+      setOnboardedClient(json.client);
+    } catch (e) {
+      console.error("[handleDeleteService] failed, reverting:", e);
+      setClients(prev => prev.map(x => x.id === c.id ? c : x));
+      setOnboardedClient(c);
+    }
   };
 
-  const handleOnboardSubmit = (e) => {
+  const handleOnboardSubmit = async (e) => {
     e.preventDefault();
     const errs = {};
     if (!orgName.trim()) errs.name = "Business name is required.";
@@ -1207,71 +1432,64 @@ Always handle objections politely.`;
     }
 
     setOnboardErrors({});
+    setApiError("");
     setIsOnboarding(true);
 
-    setTimeout(() => {
+    const onboardingInput = {
+      name: orgName.trim(), industry: orgIndustry.trim(), targetCustomerType: orgCustomerType,
+      contactName: contactName.trim(), email: orgEmail.trim(), phone: orgPhone.trim(), timezone: orgTimezone,
+    };
+
+    // Edit mode: patch the existing client in place (keep id/color/score/billing), stay on this page.
+    if (editingClientId) {
       const words = orgName.trim().split(/\s+/);
       const avatar = words.map(w => w[0]).join("").substring(0, 2).toUpperCase() || "OR";
-
-      // Edit mode: patch the existing client in place (keep id/color/score/billing), stay on this page.
-      if (editingClientId) {
-        const patch = {
-          name: orgName.trim(),
-          industry: orgIndustry.trim(),
-          targetCustomerType: orgCustomerType,
-          email: orgEmail.trim(),
-          contact: `${contactName.trim()} (${orgPhone.trim()})`,
-          contactName: contactName.trim(),
-          contactPhone: orgPhone.trim(),
-          timezone: orgTimezone,
-          avatar,
-        };
-        setClients(prev => prev.map(c => c.id === editingClientId ? { ...c, ...patch } : c));
-        setOnboardedClient(prev => prev ? { ...prev, ...patch } : prev);
-        setOrgName(""); setOrgIndustry(""); setOrgCustomerType(""); setContactName(""); setOrgEmail(""); setOrgPhone(""); setOrgTimezone("America/New_York");
-        setIsOnboarding(false);
-        setShowOnboardModal(false);   // just close — details are already updated
-        setEditingClientId(null);
-        return;
-      }
-
-      const colors = ["#4F46FF", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#6366F1", "#14B8A6"];
-      const randomColor = colors[Math.floor(Math.random() * colors.length)];
-      
-      const newId = "acc_" + orgName.trim().replace(/[^a-zA-Z0-9]/g, "").substring(0, 8);
-      
-      const newClient = {
-        id: newId,
-        name: orgName.trim(),
-        industry: orgIndustry.trim(),
-        targetCustomerType: orgCustomerType,
-        email: orgEmail.trim(),
-        contact: `${contactName.trim()} (${orgPhone.trim()})`,
-        contactName: contactName.trim(),
-        contactPhone: orgPhone.trim(),
-        timezone: orgTimezone,
-        avatar,
-        color: randomColor,
-        leads: "0 Leads (Paused)",
-        services: ["Do Everything (Full Funnel)"],
-        health: "Operational",
-        retainer: "$1,500.00",
-        payment: "Unpaid",
-        score: 100,
-        onboarded: new Date().toISOString().split("T")[0]
+      const patch = {
+        name: onboardingInput.name, industry: onboardingInput.industry, targetCustomerType: onboardingInput.targetCustomerType,
+        email: onboardingInput.email, contact: `${onboardingInput.contactName} (${onboardingInput.phone})`,
+        contactName: onboardingInput.contactName, contactPhone: onboardingInput.phone, timezone: onboardingInput.timezone, avatar,
       };
+      setClients(prev => prev.map(c => c.id === editingClientId ? { ...c, ...patch } : c));
+      setOnboardedClient(prev => prev ? { ...prev, ...patch } : prev);
+
+      if (isRealAccountId(editingClientId)) {
+        try {
+          const res = await fetch(`/api/accounts/${editingClientId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(onboardingInput) });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error);
+          setClients(prev => prev.map(c => c.id === editingClientId ? json.client : c));
+          setOnboardedClient(json.client);
+        } catch (err) {
+          setApiError(`Couldn't save to the server: ${err.message}. Your changes are shown locally — try again.`);
+          setIsOnboarding(false);
+          return;
+        }
+      }
+      setOrgName(""); setOrgIndustry(""); setOrgCustomerType(""); setContactName(""); setOrgEmail(""); setOrgPhone(""); setOrgTimezone("America/New_York");
+      setIsOnboarding(false);
+      setShowOnboardModal(false);
+      setEditingClientId(null);
+      return;
+    }
+
+    // Create: POST to the real API. On failure, surface it — never pretend the client was onboarded.
+    try {
+      const res = await fetch("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(onboardingInput) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      const newClient = json.client;
 
       setClients(prev => [...prev, newClient]);
       setOnboardedClient(newClient);
 
       const timestamp = new Date().toLocaleTimeString();
       setTerminalLogs(prev => [
-        `[${timestamp}] SUCCESS: Onboarded organization "${orgName.trim()}" (Contact: ${contactName.trim()}, TZ: ${orgTimezone})`,
+        `[${timestamp}] SUCCESS: Onboarded organization "${onboardingInput.name}" (Contact: ${onboardingInput.contactName}, TZ: ${onboardingInput.timezone})`,
         ...prev
       ]);
 
       setIsOnboarding(false);
-      setOnboardSuccessMessage(`Successfully onboarded ${orgName.trim()}!`);
+      setOnboardSuccessMessage(`Successfully onboarded ${onboardingInput.name}!`);
 
       setOrgName("");
       setOrgIndustry("");
@@ -1286,8 +1504,10 @@ Always handle objections politely.`;
         setShowOnboardModal(false);
         setCurrentView("create-service");
       }, 1500);
-      
-    }, 1200);
+    } catch (err) {
+      setApiError(`Couldn't create this client on the server: ${err.message}. Nothing was saved — please try again.`);
+      setIsOnboarding(false);
+    }
   };
 
   const q = query.trim().toLowerCase();
@@ -3427,6 +3647,12 @@ Always handle objections politely.`;
               </p>
             </div>
 
+            {apiError && (
+              <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#B91C1C" }}>
+                {apiError}
+              </div>
+            )}
+
             {onboardSuccessMessage ? (
               <div style={{ 
                 display: "flex", 
@@ -4129,9 +4355,11 @@ Always handle objections politely.`;
                   {configuringService ? (
                     <button
                       onClick={handleSaveDraft}
+                      disabled={isSavingService}
                       style={{
                         background: "#FFFBEB",
                         color: "#D97706",
+                        opacity: isSavingService ? 0.6 : 1,
                         border: "1px solid #FCD34D",
                         borderRadius: "10px",
                         padding: "9px 16px",
@@ -4309,7 +4537,7 @@ Always handle objections politely.`;
                                 <span>Connect a calendar (Google Calendar / Outlook Sync)</span>
                               </label>
                               <span style={{ fontSize: "11px", color: "#8A90A0", marginLeft: "22px", display: "block" }}>
-                                Mock connection only. In production, this hooks into the client&apos;s live calendar feed.
+                                Syncs live with the client&apos;s calendar once connected.
                               </span>
                             </div>
 
@@ -4712,12 +4940,7 @@ Always handle objections politely.`;
                               type="file"
                               multiple
                               style={{ display: "none" }}
-                              onChange={(e) => {
-                                if (e.target.files) {
-                                  const names = Array.from(e.target.files).map(f => f.name);
-                                  setAttachedDocuments([...attachedDocuments, ...names]);
-                                }
-                              }}
+                              onChange={(e) => handleDocumentUpload(e.target.files)}
                             />
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#A0A6B4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "8px" }}>
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -4996,26 +5219,31 @@ Always handle objections politely.`;
                                 )}
                               </div>
                             ))}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPhoneNumbers([...phoneNumbers, { number: "", cap: 40 }]);
-                              }}
-                              style={{
-                                width: "fit-content",
-                                background: "transparent",
-                                border: "1px dashed #4F46FF",
-                                color: "#4F46FF",
-                                borderRadius: "8px",
-                                padding: "6px 12px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                marginTop: "4px"
-                              }}
-                            >
-                              + Add Phone Number
-                            </button>
+                            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPhoneNumbers([...phoneNumbers, { number: "", cap: 40 }]);
+                                }}
+                                style={{
+                                  width: "fit-content",
+                                  background: "transparent",
+                                  border: "1px dashed #4F46FF",
+                                  color: "#4F46FF",
+                                  borderRadius: "8px",
+                                  padding: "6px 12px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                + Add manually
+                              </button>
+                              <BuyPhoneNumberButton
+                                accountId={onboardedClient?.id}
+                                onBought={(n) => { setPhoneNumbers(prev => [...prev.filter(p => p.number.trim()), { number: n.number, cap: 40 }]); recordBoughtNumberOnAccount(n.id); }}
+                              />
+                            </div>
                           </div>
                         </div>
 
@@ -5289,68 +5517,34 @@ Always handle objections politely.`;
                           {/* Voice select */}
                           <div ref={voiceRef} style={{ flex: 1, position: "relative" }}>
                             <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Voice Profile</label>
-                            <div style={{ display: "flex", gap: "8px" }}>
-                              <div
-                                onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
-                                style={{
-                                  flex: 1,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyLeft: "space-between",
-                                  padding: "10px 12px",
-                                  border: isVoiceDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
-                                  borderRadius: "8px",
-                                  cursor: "pointer",
-                                  fontSize: "13px",
-                                  color: "#1F2433",
-                                  background: "#FFFFFF",
-                                  transition: "all 150ms ease",
-                                  display: "flex",
-                                  justifyContent: "space-between"
-                                }}
-                              >
-                                <span>
-                                  {voiceSelection === "default" && "Default voice (11labs)"}
-                                  {voiceSelection === "rachel" && "Rachel (11labs)"}
-                                  {voiceSelection === "drew" && "Drew (11labs)"}
-                                  {voiceSelection === "custom" && "Custom voice (VAPI)"}
-                                </span>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoiceDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease", flexShrink: 0 }}>
-                                  <path d="m6 9 6 6 6-6" />
-                                </svg>
-                              </div>
-                              <button
-                                type="button"
-                                title="Voice preview — coming when voices are connected"
-                                style={{
-                                  background: "#F4F5FF",
-                                  color: "#4F46FF",
-                                  border: "1px solid #C7CBF5",
-                                  borderRadius: "8px",
-                                  padding: "10px 14px",
-                                  fontSize: "12px",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "4px"
-                                }}
-                              >
-                                <span>▶</span> Preview
-                              </button>
+                            <div
+                              onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "10px 12px",
+                                border: isVoiceDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontSize: "13px",
+                                color: "#1F2433",
+                                background: "#FFFFFF",
+                                transition: "all 150ms ease"
+                              }}
+                            >
+                              <span>{voiceSelection === "default" ? "Elliot (VAPI default)" : `${voiceSelection} (VAPI)`}</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoiceDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease", flexShrink: 0 }}>
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
                             </div>
                             {isVoiceDropdownOpen && (
-                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                                {[
-                                  { value: "default", label: "Default voice (11labs)" },
-                                  { value: "rachel", label: "Rachel (11labs)" },
-                                  { value: "drew", label: "Drew (11labs)" },
-                                  { value: "custom", label: "Custom voice (VAPI)" }
-                                ].map((item) => (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px", maxHeight: "260px", overflowY: "auto" }}>
+                                {VAPI_VOICES.map((name) => (
                                   <div
-                                    key={item.value}
+                                    key={name}
                                     onClick={() => {
-                                      setVoiceSelection(item.value);
+                                      setVoiceSelection(name === "Elliot" ? "default" : name);
                                       setIsVoiceDropdownOpen(false);
                                     }}
                                     style={{
@@ -5358,14 +5552,14 @@ Always handle objections politely.`;
                                       fontSize: "12px",
                                       borderRadius: "6px",
                                       cursor: "pointer",
-                                      color: voiceSelection === item.value ? "#4F46FF" : "#5A6072",
-                                      background: voiceSelection === item.value ? "#F4F5FF" : "transparent",
-                                      fontWeight: voiceSelection === item.value ? 600 : 500
+                                      color: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? "#4F46FF" : "#5A6072",
+                                      background: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? "#F4F5FF" : "transparent",
+                                      fontWeight: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? 600 : 500
                                     }}
-                                    onMouseEnter={(e) => { if (voiceSelection !== item.value) e.currentTarget.style.background = "#F7F8FA"; }}
-                                    onMouseLeave={(e) => { if (voiceSelection !== item.value) e.currentTarget.style.background = "transparent"; }}
+                                    onMouseEnter={(e) => { if (voiceSelection !== name) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (voiceSelection !== name) e.currentTarget.style.background = "transparent"; }}
                                   >
-                                    {item.label}
+                                    {name}{name === "Elliot" ? " (default)" : ""}
                                   </div>
                                 ))}
                               </div>
@@ -5392,46 +5586,54 @@ Always handle objections politely.`;
                               transition: "all 150ms ease"
                             }}
                           >
-                            <span>
-                              {modelSelection === "gpt-4o-mini" && "GPT-4o-mini"}
-                              {modelSelection === "gpt-4o" && "GPT-4o"}
-                              {modelSelection === "claude-3-5-sonnet" && "Claude 3.5 Sonnet"}
-                            </span>
+                            <span>{VAPI_MODELS.find(m => m.key === modelSelection)?.label ?? modelSelection}</span>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isModelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
                               <path d="m6 9 6 6 6-6" />
                             </svg>
                           </div>
                           {isModelDropdownOpen && (
                             <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                              {[
-                                { value: "gpt-4o-mini", label: "GPT-4o-mini" },
-                                { value: "gpt-4o", label: "GPT-4o" },
-                                { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" }
-                              ].map((item) => (
+                              {VAPI_MODELS.map((item) => (
                                 <div
-                                  key={item.value}
+                                  key={item.key}
                                   onClick={() => {
-                                    setModelSelection(item.value);
+                                    setModelSelection(item.key);
                                     setIsModelDropdownOpen(false);
                                   }}
                                   style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: "8px",
                                     padding: "8px 10px",
                                     fontSize: "12px",
                                     borderRadius: "6px",
                                     cursor: "pointer",
-                                    color: modelSelection === item.value ? "#4F46FF" : "#5A6072",
-                                    background: modelSelection === item.value ? "#F4F5FF" : "transparent",
-                                    fontWeight: modelSelection === item.value ? 600 : 500
+                                    color: modelSelection === item.key ? "#4F46FF" : "#5A6072",
+                                    background: modelSelection === item.key ? "#F4F5FF" : "transparent",
+                                    fontWeight: modelSelection === item.key ? 600 : 500
                                   }}
-                                  onMouseEnter={(e) => { if (modelSelection !== item.value) e.currentTarget.style.background = "#F7F8FA"; }}
-                                  onMouseLeave={(e) => { if (modelSelection !== item.value) e.currentTarget.style.background = "transparent"; }}
+                                  onMouseEnter={(e) => { if (modelSelection !== item.key) e.currentTarget.style.background = "#F7F8FA"; }}
+                                  onMouseLeave={(e) => { if (modelSelection !== item.key) e.currentTarget.style.background = "transparent"; }}
                                 >
-                                  {item.label}
+                                  <span>{item.label}</span>
+                                  <span style={{ fontSize: "10px", color: item.tier === "Cheap" ? "#10B981" : "#D97706", fontWeight: 600 }}>{item.tier}</span>
                                 </div>
                               ))}
                             </div>
                           )}
                         </div>
+
+                        {/* Live cost estimate — from VAPI's published rates, not a live price feed */}
+                        {(() => {
+                          const { perMin, perCall } = estimateCallCost(modelSelection);
+                          return (
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#5A6072" }}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                              <span>~${perMin.toFixed(3)}/connected minute · ~${perCall.toFixed(2)}/call at 3 min <span style={{ color: "#A0A6B4" }}>(estimate, not a live price)</span></span>
+                            </div>
+                          );
+                        })()}
 
                       </div>
                     );
@@ -5664,6 +5866,12 @@ Always handle objections politely.`;
                     )}
                   </div>
 
+                  {serviceApiError && (
+                    <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#B91C1C" }}>
+                      {serviceApiError}
+                    </div>
+                  )}
+
                   {/* Section 7: Footer actions */}
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "16px" }}>
                     <button
@@ -5688,7 +5896,7 @@ Always handle objections politely.`;
                     </button>
                     {(() => {
                       // Lead Qualification (capture-only) and Appointment Reminders don't need a meeting.
-                      const canActivate = (configuringService === "Lead Qualification" && !recruitmentEnabled) || configuringService === "Appointment Reminders" || !!meetingMode;
+                      const canActivate = ((configuringService === "Lead Qualification" && !recruitmentEnabled) || configuringService === "Appointment Reminders" || !!meetingMode) && !isSavingService;
                       return (
                     <button
                       type="button"
@@ -5709,7 +5917,7 @@ Always handle objections politely.`;
                       onMouseEnter={(e) => { if (canActivate) e.currentTarget.style.background = "#16A34A"; }}
                       onMouseLeave={(e) => { if (canActivate) e.currentTarget.style.background = "#22C55E"; }}
                     >
-                      {onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service"}
+                      {isSavingService ? "Saving..." : (onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service")}
                     </button>
                       );
                     })()}
@@ -5773,15 +5981,21 @@ Always handle objections politely.`;
                               )}
                             </div>
                           ))}
-                          <button
-                            type="button"
-                            onClick={() => setInboundNumbers(prev => [...prev, { number: "" }])}
-                            style={{ background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "8px", padding: "8px 12px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-start", marginTop: "4px" }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
-                            onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
-                          >
-                            + Add Number
-                          </button>
+                          <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                            <button
+                              type="button"
+                              onClick={() => setInboundNumbers(prev => [...prev, { number: "" }])}
+                              style={{ background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "8px", padding: "8px 12px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                              onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                            >
+                              + Add manually
+                            </button>
+                            <BuyPhoneNumberButton
+                              accountId={onboardedClient?.id}
+                              onBought={(n) => { setInboundNumbers(prev => [...prev.filter(p => p.number.trim()), { number: n.number }]); recordBoughtNumberOnAccount(n.id); }}
+                            />
+                          </div>
                           <span style={{ fontSize: "11px", color: "#8A90A0", marginTop: "2px" }}>
                             Callers dial this number, or forward their existing line here.
                           </span>
@@ -5976,19 +6190,12 @@ Always handle objections politely.`;
                         {/* File Upload Zone */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                           <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Attached Knowledge Documents</label>
-                          <div
+                          <label
                             onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                              e.preventDefault();
-                              const files = Array.from(e.dataTransfer.files).map(f => f.name);
-                              setAttachedDocuments(prev => Array.from(new Set([...prev, ...files])));
-                            }}
-                            style={{ border: "2px dashed #ECEEF2", borderRadius: "10px", padding: "20px", textAlign: "center", cursor: "pointer", background: "#F9FAFB" }}
-                            onClick={() => {
-                              const files = [`FAQ-Inbound-Doc-${Math.floor(Math.random() * 1000)}.pdf`];
-                              setAttachedDocuments(prev => Array.from(new Set([...prev, ...files])));
-                            }}
+                            onDrop={(e) => { e.preventDefault(); handleDocumentUpload(e.dataTransfer.files); }}
+                            style={{ display: "block", border: "2px dashed #ECEEF2", borderRadius: "10px", padding: "20px", textAlign: "center", cursor: "pointer", background: "#F9FAFB" }}
                           >
+                            <input type="file" multiple style={{ display: "none" }} onChange={(e) => handleDocumentUpload(e.target.files)} />
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 8px" }}>
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                               <polyline points="17 8 12 3 7 8" />
@@ -5996,7 +6203,7 @@ Always handle objections politely.`;
                             </svg>
                             <span style={{ fontSize: "12px", color: "#1F2433", fontWeight: 600 }}>Drag files here, or click to browse</span>
                             <span style={{ fontSize: "10px", color: "#8A90A0", display: "block", marginTop: "2px" }}>Supports PDF, TXT, DOCX up to 10MB</span>
-                          </div>
+                          </label>
                           {attachedDocuments.length > 0 && (
                             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
                               {attachedDocuments.map(name => (
@@ -6286,22 +6493,22 @@ Always handle objections politely.`;
                               onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
                               style={{ display: "flex", alignItems: "center", justifySelf: "space-between", padding: "8px 10px", border: isVoiceDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
                             >
-                              <span>{voiceSelection === "default" ? "Default voice (11labs)" : voiceSelection}</span>
+                              <span>{voiceSelection === "default" ? "Elliot (VAPI default)" : `${voiceSelection} (VAPI)`}</span>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoiceDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
                                 <path d="m6 9 6 6 6-6" />
                               </svg>
                             </div>
                             {isVoiceDropdownOpen && (
-                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                                {["Default voice (11labs)", "Rachel (Friendly)", "Drew (Professional)", "Marcus (Energetic)"].map((v) => (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px", maxHeight: "260px", overflowY: "auto" }}>
+                                {VAPI_VOICES.map((name) => (
                                   <div
-                                    key={v}
-                                    onClick={() => { setVoiceSelection(v === "Default voice (11labs)" ? "default" : v); setIsVoiceDropdownOpen(false); }}
-                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: (voiceSelection === "default" && v === "Default voice (11labs)") || voiceSelection === v ? "#4F46FF" : "#5A6072", background: (voiceSelection === "default" && v === "Default voice (11labs)") || voiceSelection === v ? "#F4F5FF" : "transparent", fontWeight: (voiceSelection === "default" && v === "Default voice (11labs)") || voiceSelection === v ? 600 : 500 }}
-                                    onMouseEnter={(e) => { if (voiceSelection !== v) e.currentTarget.style.background = "#F7F8FA"; }}
-                                    onMouseLeave={(e) => { if (voiceSelection !== v) e.currentTarget.style.background = "transparent"; }}
+                                    key={name}
+                                    onClick={() => { setVoiceSelection(name === "Elliot" ? "default" : name); setIsVoiceDropdownOpen(false); }}
+                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? "#4F46FF" : "#5A6072", background: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? "#F4F5FF" : "transparent", fontWeight: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? 600 : 500 }}
+                                    onMouseEnter={(e) => { if (voiceSelection !== name) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (voiceSelection !== name) e.currentTarget.style.background = "transparent"; }}
                                   >
-                                    {v}
+                                    {name}{name === "Elliot" ? " (default)" : ""}
                                   </div>
                                 ))}
                               </div>
@@ -6315,28 +6522,40 @@ Always handle objections politely.`;
                               onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
                               style={{ display: "flex", alignItems: "center", justifySelf: "space-between", padding: "8px 10px", border: isModelDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
                             >
-                              <span>{modelSelection}</span>
+                              <span>{VAPI_MODELS.find(m => m.key === modelSelection)?.label ?? modelSelection}</span>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isModelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
                                 <path d="m6 9 6 6 6-6" />
                               </svg>
                             </div>
                             {isModelDropdownOpen && (
                               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                                {["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet", "llama-3.1-70b"].map((m) => (
+                                {VAPI_MODELS.map((item) => (
                                   <div
-                                    key={m}
-                                    onClick={() => { setModelSelection(m); setIsModelDropdownOpen(false); }}
-                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: modelSelection === m ? "#4F46FF" : "#5A6072", background: modelSelection === m ? "#F4F5FF" : "transparent", fontWeight: modelSelection === m ? 600 : 500 }}
-                                    onMouseEnter={(e) => { if (modelSelection !== m) e.currentTarget.style.background = "#F7F8FA"; }}
-                                    onMouseLeave={(e) => { if (modelSelection !== m) e.currentTarget.style.background = "transparent"; }}
+                                    key={item.key}
+                                    onClick={() => { setModelSelection(item.key); setIsModelDropdownOpen(false); }}
+                                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: modelSelection === item.key ? "#4F46FF" : "#5A6072", background: modelSelection === item.key ? "#F4F5FF" : "transparent", fontWeight: modelSelection === item.key ? 600 : 500 }}
+                                    onMouseEnter={(e) => { if (modelSelection !== item.key) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (modelSelection !== item.key) e.currentTarget.style.background = "transparent"; }}
                                   >
-                                    {m}
+                                    <span>{item.label}</span>
+                                    <span style={{ fontSize: "10px", color: item.tier === "Cheap" ? "#10B981" : "#D97706", fontWeight: 600 }}>{item.tier}</span>
                                   </div>
                                 ))}
                               </div>
                             )}
                           </div>
                         </div>
+
+                        {/* Live cost estimate — from VAPI's published rates, not a live price feed */}
+                        {(() => {
+                          const { perMin, perCall } = estimateCallCost(modelSelection);
+                          return (
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#5A6072", gridColumn: "1 / -1" }}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                              <span>~${perMin.toFixed(3)}/connected minute · ~${perCall.toFixed(2)}/call at 3 min <span style={{ color: "#A0A6B4" }}>(estimate, not a live price)</span></span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
@@ -6403,6 +6622,12 @@ Always handle objections politely.`;
                     )}
                   </div>
 
+                  {serviceApiError && (
+                    <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#B91C1C" }}>
+                      {serviceApiError}
+                    </div>
+                  )}
+
                   {/* Form Footer Action Buttons */}
                   <div style={{ display: "flex", justifySelf: "flex-end", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "16px" }}>
                     <button
@@ -6427,7 +6652,7 @@ Always handle objections politely.`;
                     </button>
                     {(() => {
                       // Support / Complaint Line can activate without a meeting, AI Receptionist needs a meeting.
-                      const canActivate = (configuringService === "Support / Complaint Line") || !!meetingMode;
+                      const canActivate = ((configuringService === "Support / Complaint Line") || !!meetingMode) && !isSavingService;
                       return (
                         <button
                           type="button"
@@ -6448,7 +6673,7 @@ Always handle objections politely.`;
                           onMouseEnter={(e) => { if (canActivate) e.currentTarget.style.background = "#16A34A"; }}
                           onMouseLeave={(e) => { if (canActivate) e.currentTarget.style.background = "#22C55E"; }}
                         >
-                          {onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service"}
+                          {isSavingService ? "Saving..." : (onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service")}
                         </button>
                       );
                     })()}
@@ -6628,7 +6853,7 @@ Always handle objections politely.`;
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>AI Model / Voice</span>
-                                  <span style={{ color: "#1F2433" }}>{config.modelSelection} / {config.voiceSelection === "default" ? "Default voice (11labs)" : config.voiceSelection}</span>
+                                  <span style={{ color: "#1F2433" }}>{config.modelSelection} / {config.voiceSelection === "default" ? "Elliot (VAPI default)" : `${config.voiceSelection} (VAPI)`}</span>
                                 </div>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>Phone Pool &amp; Capacity</span>

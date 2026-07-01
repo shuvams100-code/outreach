@@ -4,6 +4,24 @@ A running record of every visual/design decision: colors, shapes, components, ty
 
 ---
 
+## 2026-07-01 (copy sweep + real backend)
+
+### Copy fix: removed implementation-status leaks from ops-facing text
+- "Connect a calendar" note under Appointment Reminders read *"Mock connection only. In production, this hooks into the client's live calendar feed."* — exposed internal build status to what should read as a normal product screen. Changed to *"Syncs live with the client's calendar once connected."* Swept the rest of the file for similar language (stub/simulate/fake/hardcoded/etc.) — nothing else needed fixing; the remaining "coming soon" notes (voice preview, the 3 unbuilt services) are honest and left as-is.
+- **Backend wiring** for the account + service lifecycle (onboarding, edit, enable/disable, activate/save-draft/deactivate/delete for all 6 built services) is now real, not mock — full detail and verification notes in `docs/mock-and-wiring.md` (not duplicated here since it's engineering, not a visual decision).
+
+---
+
+## 2026-07-01 (Appointment Reminders config)
+
+### Service 4 — Appointment Reminders (built by Antigravity, reviewed)
+- Shared-form extended for "Appointment Reminders". New "Appointment Source & Reminder Timing" section replaces the lead/ICP section: reminder type (Confirmation / No-Show Recovery / Event Reminder), 3 sources (auto-remind our booked meetings **[gated on an active Outbound/Reactivation booking service]**, connect calendar, upload list), and timing (value + unit, label adapts before/after).
+- Offer, Lead Enrichment card, and Scraper Sources card hidden; variant dropdown hidden; Meeting section kept (rebooking); no B2B/B2C scrape gate (no scraping). Activates without a required meeting. Defaults + save/load + summary detail all present.
+- **Fix on review:** timing unit now normalizes when switching reminder type (No-Show Recovery uses minutes/hours; others hours/days) so the select never goes out of sync.
+- Auto-link is opt-in, never mandatory — reminders can run standalone (calendar/upload) or linked to booked meetings. Backend note (tracker): the reminder sweep must be gated to accounts that bought the service + enabled the link.
+
+---
+
 ## 2026-06-30 (Lead Qualification config)
 
 ### Service 3 — Lead Qualification config built (reuses the shared form)
