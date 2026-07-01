@@ -4,6 +4,18 @@ A running record of every visual/design decision: colors, shapes, components, ty
 
 ---
 
+## 2026-07-02 (services 7+9 merged; buying-intent added)
+
+### Service 7 — "Lead Generation" and "Lead Enrichment" merged into one service, "Lead Generation & Enrichment"
+- **Decision (product):** enrichment was never actually dependent on generation in the backend — `enrichAccount()` enriches whatever's in `leads` with `state: 'new'`, regardless of whether it got there via scrape or CSV upload. Splitting them into two sellable services implied a false dependency. Merged into one card: service 9 removed, service 7 renamed "7. Lead Generation & Enrichment" (`docs/service-catalog.md`'s "9 sellable services" and its `lead_enrich` row are now stale — count is 8, flagged there too).
+- **New config screen built** for `configuringService === "Lead Generation"` (was a "coming soon" placeholder) — two independent toggles, not a forced pipeline: **"2. Generate New Leads"** (city/state/radius/business type, source chips — any combination, leads-per-run cap) and **"3. Enrich Leads"** (depth select), either can run alone or together.
+- **Manual only, by explicit decision** — no auto/scheduled toggle in this screen at all. Same Activate/Save Draft pattern as every other service. A "run it" action belongs on a future client-facing dashboard (not built), not here.
+- **New Section 1 field: "Buying Intent Signal"** (optional, free text) — sits beside ICP. ICP = who to target (static fit); this = what recent, observable sign proves they need it *now* (e.g. "posted a job for a delivery driver"). Reuses the enrichment step's existing Tavily+LLM call (one more field in the same JSON response) rather than adding a new data source or API call — zero new spend.
+- **Soft signal by decision, not a gate:** a lead with no intent evidence is NOT disqualified — `fits_icp` alone still decides `enriched` vs `disqualified`. `intent_match`/`intent_evidence` are tag/rank-only. Reasoning: LLM intent-reads off short site/search text are noisier than the existing ICP-fit check, so gating on it risked silently starving the pipeline of real, fit leads. Recorded as a user-confirmed decision (asked directly, "soft signal" chosen over "hard filter").
+- **Backend:** `accounts.intent_signal_description` (new column), `leads.intent_match` / `leads.intent_evidence` (new columns) — see `docs/mock-and-wiring.md` for the wiring detail.
+
+---
+
 ## 2026-07-01 (copy sweep + real backend)
 
 ### Copy fix: removed implementation-status leaks from ops-facing text

@@ -138,11 +138,17 @@ type LLMProfile = {
   email: string | null;
   business_profile: string | null;
   fits_icp: boolean;
+  intent_match: boolean;
+  intent_evidence: string | null;
 };
 
 // `icpDescription` is the account's definition of a good lead (per-account, never hardcoded).
 // When absent, every business is kept (fits_icp defaults true) — no filtering.
-async function callLLM(text: string, businessName: string, icpDescription?: string | null): Promise<LLMProfile | null> {
+// `intentSignal` (per-account, optional) is a *timing* signal — not who they are, but whether they
+// look like they need this right now (e.g. "recently posted a job for a delivery driver"). Unlike
+// fits_icp, a missing intent match never disqualifies — it's a ranking/personalization tag only,
+// since it's read off the same short web text and is a noisier signal than ICP fit.
+async function callLLM(text: string, businessName: string, icpDescription?: string | null, intentSignal?: string | null): Promise<LLMProfile | null> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
 
@@ -152,9 +158,18 @@ async function callLLM(text: string, businessName: string, icpDescription?: stri
   const fitsRule = icpDescription
     ? `true if this business matches the profile above, false if it clearly does not`
     : `always true (no filtering configured)`;
+  const intentLine = intentSignal
+    ? `\nWe're also looking for this specific buying-intent signal (a sign they need this NOW, not just a category match): ${intentSignal}`
+    : "";
+  const intentRule = intentSignal
+    ? `true if the content contains evidence of the signal above, false otherwise`
+    : `always false (no intent signal configured)`;
+  const intentEvidenceRule = intentSignal
+    ? `a short quote or paraphrase of the evidence if intent_match is true, else null`
+    : `null`;
 
   const prompt = `Analyze this business text and return ONLY valid JSON — no markdown, no extra text.
-Business name: ${businessName}${icpLine}
+Business name: ${businessName}${icpLine}${intentLine}
 Content: ${text}
 
 Return this exact JSON shape:
@@ -163,7 +178,9 @@ Return this exact JSON shape:
   "last_name": last name of a key person found in the text, or null,
   "email": email address found in the text, or null,
   "business_profile": "2-4 sentences: what they do, who they serve, their specialties, and a compelling talking angle for a cold call",
-  "fits_icp": ${fitsRule}
+  "fits_icp": ${fitsRule},
+  "intent_match": ${intentRule},
+  "intent_evidence": ${intentEvidenceRule}
 }`;
 
   const tryModel = async (model: string) => {
@@ -256,12 +273,15 @@ export type EnrichUpdate = {
   business_profile: string | null;
   timezone: string | null;
   state: "enriched" | "disqualified";
+  intent_match: boolean | null;
+  intent_evidence: string | null;
 };
 
 // Returns the update to apply, or null when NO rung produced data — caller leaves the
 // lead `new` so a re-run retries it (never fake-mark it `enriched` on empty results).
 // `icpDescription` (per-account) decides what counts as a fitting lead — no industry hardcoded.
-export async function enrichLead(lead: Lead, icpDescription?: string | null, accountId?: string): Promise<EnrichUpdate | null> {
+// `intentSignal` (per-account, optional) tags/ranks for buying intent — soft signal, never disqualifies.
+export async function enrichLead(lead: Lead, icpDescription?: string | null, accountId?: string, intentSignal?: string | null): Promise<EnrichUpdate | null> {
   // Physical address state is more reliable than area code for mobile numbers (1.2).
   const timezone = timezoneFromState(lead.address_state) ?? timezoneFromPhone(lead.phone);
   const website = (lead.raw_data?.website as string | null | undefined) ?? null;
@@ -272,7 +292,7 @@ export async function enrichLead(lead: Lead, icpDescription?: string | null, acc
     const text = await fetchSiteText(website);
     if (text) {
       const email = extractEmail(text);
-      const llm = await callLLM(text, lead.business_name ?? "", icpDescription);
+      const llm = await callLLM(text, lead.business_name ?? "", icpDescription, intentSignal);
       if (llm) {
         profile = { ...llm, email: email ?? llm.email };
         if (accountId) {
@@ -293,7 +313,7 @@ export async function enrichLead(lead: Lead, icpDescription?: string | null, acc
       if (accountId) {
         await logCost(accountId, "tavily", 0.01, `Tavily search for ${lead.business_name}`);
       }
-      const llm = await callLLM(tavilyText, lead.business_name ?? "", icpDescription);
+      const llm = await callLLM(tavilyText, lead.business_name ?? "", icpDescription, intentSignal);
       if (llm) {
         profile = profile ? { ...profile, ...llm } : llm;
         if (accountId) {
@@ -314,6 +334,8 @@ export async function enrichLead(lead: Lead, icpDescription?: string | null, acc
     business_profile: profile.business_profile ?? null,
     timezone,
     state: fitsIcp ? "enriched" : "disqualified",
+    intent_match: intentSignal ? (profile.intent_match ?? false) : null,
+    intent_evidence: intentSignal ? (profile.intent_evidence ?? null) : null,
   };
 }
 
@@ -325,7 +347,7 @@ export async function enrichAccount(accountId: string): Promise<{
   errors: number;
 }> {
   // The account's ICP (per-account; null = keep everything) drives the fit decision.
-  const { data: acct } = await supabase.from("accounts").select("icp_description, target_customer_type").eq("id", accountId).single();
+  const { data: acct } = await supabase.from("accounts").select("icp_description, target_customer_type, intent_signal_description").eq("id", accountId).single();
 
   // LEGAL GATE: enrichment (researching each lead online) is only for B2B. For consumer audiences — or
   // any account not explicitly 'business' — we never enrich individuals. Authoritative engine-side guard.
@@ -335,6 +357,7 @@ export async function enrichAccount(accountId: string): Promise<{
   }
 
   const icp = acct?.icp_description ?? null;
+  const intentSignal = acct?.intent_signal_description ?? null;
 
   const { data: leads, error } = await supabase
     .from("leads")
@@ -349,7 +372,7 @@ export async function enrichAccount(accountId: string): Promise<{
     i++;
     const name = (lead as Lead).business_name ?? "(no name)";
     try {
-      const update = await enrichLead(lead as Lead, icp, accountId);
+      const update = await enrichLead(lead as Lead, icp, accountId, intentSignal);
       if (!update) {
         failed++;
         console.log(`[${i}/${total}] ${name} → failed (no data; left as new)`);

@@ -93,6 +93,20 @@ The client list/directory *does* show real accounts now (merged in via `GET /api
 | 🟢 "What it does" chips (Receptionist vs Support Line) | `inbound_receptionist`/`complaint_intake` presets' `enabled_tools` are real and now actually applied via the Activate-Service spine | — | `presets.ts` |
 | ⚠️ **Adjacent gap found, not caused by this screen:** `webhook-vapi.ts`'s end-of-call handler explicitly **skips inbound calls** ("Non-outbound calls (reminders, inbound) don't carry our lead metadata — skip silently"). Once services 5/6 go live, inbound calls will never be logged to `calls`, never get an outcome classification, and their **cost will never be deducted from the account balance**. | n/a | give inbound calls their own metadata path (or relax the webhook's requirement) so `processVapiCallEnd` also logs/costs them | `webhook-vapi.ts` |
 
+## Lead Generation & Enrichment (service 7 — built 2026-07-02; was 🔴 coming-soon, merged with the former service 9)
+
+Data-only, no calling agent. Two independent toggles, not a forced pipeline — enrichment was never actually dependent on generation (`enrichAccount` enriches whatever's `state: 'new'` in `leads`, scraped or uploaded, it doesn't care which).
+
+| Field / control | Mock now | Wire to | Where |
+|---|---|---|---|
+| 🟢 ICP Description | persisted via Activate/Save Draft, same as the outbound forms | — | `accounts.icp_description` |
+| 🟢 Buying Intent Signal (new field) | persisted; optional free text | soft signal only — see `enrich.ts` below, never disqualifies | `accounts.intent_signal_description` |
+| 🟢 Generate New Leads toggle + city/state/radius/business type + sources (any combination) + leads-per-run | persisted | — | `accounts.geo_city/geo_state/geo_radius_km`, `accounts.sources`, `accounts.lead_cap_per_run` |
+| 🟢 Enrich Leads toggle + depth | persisted | — | `accounts.enrichment_enabled/enrichment_depth` |
+| 🔴 Manual "Run" trigger | **by explicit decision, not built here** — no auto/scheduled option in this screen at all | belongs on a future client-facing dashboard (not built, not started) | — |
+| 🟢 **Backend: intent scoring** | `enrich.ts`'s existing Tavily+LLM call now also returns `intent_match`/`intent_evidence` in the same JSON response (zero new API spend) when `intent_signal_description` is set | soft signal — `fits_icp` alone still decides `enriched` vs `disqualified`; intent never disqualifies, only tags/ranks | `leads.intent_match`, `leads.intent_evidence` |
+| ⚠️ Still no cron/scheduler exists anywhere for scrape/enrich (unlike calling's `daily.ts`/`runDailyAccount`) — today both only run via one-off scripts (`scripts/scrape-tenant0.ts`, `scripts/enrich-tenant0.ts`), one tenant at a time. Matches the manual-only decision above, but flagging so it isn't mistaken for an oversight later. | n/a | a per-account daily/on-demand orchestrator, only if/when the client-facing "Run" button gets built | `daily.ts` has the pattern to copy |
+
 ---
 
 ## Backend (`src/`) — mostly real, these gaps remain

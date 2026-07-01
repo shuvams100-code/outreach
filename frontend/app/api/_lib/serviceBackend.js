@@ -10,9 +10,11 @@ export const SERVICE_PRESET_KEYS = {
   "Appointment Reminders": ["ai_reminders"],
   "AI Receptionist": ["inbound_receptionist"],
   "Support / Complaint Line": ["complaint_intake"],
-  "Lead Generation": ["lead_gen"],
+  // Merged 2026-07-02: service 7 now covers both generation and enrichment (enrichment isn't
+  // gated on generation — it also runs on leads uploaded outside this service). Both preset keys
+  // are data-only (no tools/script), so stacking them just keeps sources_enabled/scraping on.
+  "Lead Generation": ["lead_gen", "lead_enrich"],
   "List Cleaning": ["list_clean"],
-  "Lead Enrichment": ["lead_enrich"],
 };
 
 function presetKeysFor(serviceKey, config) {
@@ -34,6 +36,7 @@ export function buildClientFields(config, accountTimezone) {
   const set = (col, val) => { if (val !== undefined) f[col] = val; };
 
   set("icp_description", config.icpDescription);
+  set("intent_signal_description", config.intentSignalDescription);
   set("offer", config.clientOffer);
   set("broker_knowledge_base", config.knowledgeBase);
   set("scraping_enabled", config.isScrapeChecked);

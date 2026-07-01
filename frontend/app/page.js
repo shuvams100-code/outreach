@@ -535,6 +535,7 @@ export default function Home() {
 
   // Section 3: Who it calls
   const [icpDescription, setIcpDescription] = useState("");
+  const [intentSignalDescription, setIntentSignalDescription] = useState("");
   const [isUploadListChecked, setIsUploadListChecked] = useState(true);
   const [isScrapeChecked, setIsScrapeChecked] = useState(false);
   const [scrapeCity, setScrapeCity] = useState("");
@@ -994,7 +995,7 @@ Always handle objections politely.`;
   // handleActivateService/handleSaveDraft (local state) and the real API write-through.
   const buildServiceConfigPayload = (isDraft) => ({
     scriptVariant, scriptText, openingLine, successMetric, voiceSelection, modelSelection,
-    icpDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
+    icpDescription, intentSignalDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
     clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
     meetingLength, meetingBuffer, bookingCapacity,
     qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
@@ -1011,7 +1012,7 @@ Always handle objections politely.`;
 
   const handleActivateService = async () => {
     // Lead Qualification (without recruitment), Appointment Reminders, and Support Line need no meeting; otherwise required.
-    const noMeetingServices = ["Lead Qualification", "Appointment Reminders", "Support / Complaint Line"];
+    const noMeetingServices = ["Lead Qualification", "Appointment Reminders", "Support / Complaint Line", "Lead Generation"];
     const needsMeeting = !noMeetingServices.includes(configuringService) || (configuringService === "Lead Qualification" && recruitmentEnabled);
     if (needsMeeting && !meetingMode) return; // required check
     const c = onboardedClient;
@@ -1107,7 +1108,7 @@ Always handle objections politely.`;
     setReminderTimingValue("1");
     setReminderTimingUnit("hours");
 
-    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals" || serviceId === "Lead Qualification" || serviceId === "Appointment Reminders") {
+    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals" || serviceId === "Lead Qualification" || serviceId === "Appointment Reminders" || serviceId === "Lead Generation") {
       const saved = onboardedClient?.serviceConfigs?.[serviceId];
       if (saved) {
         setScriptVariant(saved.scriptVariant || (serviceId === "Reactivation & Renewals" ? "db_reactivation" : serviceId === "Appointment Reminders" ? "confirmation" : "default"));
@@ -1117,6 +1118,7 @@ Always handle objections politely.`;
         setVoiceSelection(saved.voiceSelection || "default");
         setModelSelection(saved.modelSelection || "gpt-4o-mini");
         setIcpDescription(saved.icpDescription || "");
+        setIntentSignalDescription(saved.intentSignalDescription || "");
         setIsUploadListChecked(saved.isUploadListChecked !== undefined ? saved.isUploadListChecked : true);
         setIsScrapeChecked(saved.isScrapeChecked !== undefined ? saved.isScrapeChecked : false);
         setScrapeCity(saved.scrapeCity || "");
@@ -1208,6 +1210,15 @@ Always handle objections politely.`;
         setRemindSourceUpload(true);
         setReminderTimingValue("1");
         setReminderTimingUnit("hours");
+      } else if (serviceId === "Lead Generation") {
+        // No saved config yet — Lead Generation & Enrichment defaults. Data-only: no script/voice/meeting.
+        setIcpDescription("");
+        setIntentSignalDescription("");
+        setIsScrapeChecked(true);
+        setScrapeCity(""); setScrapeState(""); setScrapeRadius("10"); setScrapeBusinessType("");
+        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxLeadsPerRun("100");
+        setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
       } else if (onboardedClient?.id === "acc_Harbor") {
         if (serviceId === "Outbound Sales / Appt Setting") {
           setScriptVariant("appointment_setting");
@@ -4144,9 +4155,9 @@ Always handle objections politely.`;
                   },
                   {
                     id: "Lead Generation",
-                    title: "7. Lead Generation (Lists)",
-                    desc: "Data only: Scrapes business contact databases to build fresh phone lists.",
-                    useCase: "Use Case: Compiling target lists (Google Maps, hotfrog) for outreach campaigns.",
+                    title: "7. Lead Generation & Enrichment",
+                    desc: "Data only: Scrapes business contact databases, then researches each lead for context and buying intent.",
+                    useCase: "Use Case: Building fresh, enriched target lists (Google Maps, Yellow Pages, Hotfrog) for outreach campaigns.",
                     icon: (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="11" cy="11" r="8" />
@@ -4162,19 +4173,6 @@ Always handle objections politely.`;
                     icon: (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                      </svg>
-                    )
-                  },
-                  {
-                    id: "Lead Enrichment",
-                    title: "9. Lead Enrichment",
-                    desc: "Data only: Deeply researches custom lead lists to extract emails and context.",
-                    useCase: "Use Case: Gathering profile data, company details, and lead intelligence.",
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                        <polyline points="2 17 12 22 22 17" />
-                        <polyline points="2 12 12 17 22 12" />
                       </svg>
                     )
                   }
@@ -6680,8 +6678,163 @@ Always handle objections politely.`;
                   </div>
 
                 </div>
+              ) : configuringService === "Lead Generation" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
+                  {/* Lead Generation & Enrichment — data-only, no calling agent, no auto-run. Manual "Run" comes from the client dashboard later. */}
+
+                  {/* Section 1: ICP + Buying Intent */}
+                  {(() => {
+                    const isConfigured = icpDescription.trim() !== "";
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Who to find (ICP &amp; Buying Intent)</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>ICP is who to target. Intent is what recent, observable sign proves they need this now.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Ideal Customer Profile (ICP) Description</label>
+                          <textarea
+                            placeholder="e.g. Dental clinics, roofers, HVAC companies in Austin, TX..."
+                            value={icpDescription}
+                            onChange={(e) => setIcpDescription(e.target.value)}
+                            style={{ width: "100%", minHeight: "70px", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", fontFamily: "inherit", resize: "vertical", outline: "none" }}
+                          />
+                          <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>Search terms and scraping keywords auto-generate from this text.</p>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Buying Intent Signal (optional)</label>
+                          <textarea
+                            placeholder="e.g. Recently posted a job for a delivery driver. Reviews mention missed calls or long wait times."
+                            value={intentSignalDescription}
+                            onChange={(e) => setIntentSignalDescription(e.target.value)}
+                            style={{ width: "100%", minHeight: "60px", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", fontFamily: "inherit", resize: "vertical", outline: "none" }}
+                          />
+                          <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>Leave blank to skip intent scoring — leads are still kept, just not tagged/ranked by intent. Never disqualifies a lead on its own.</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 2: Generate New Leads */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 700, color: "#1F2433", cursor: "pointer" }}>
+                      <input type="checkbox" checked={isScrapeChecked} onChange={(e) => setIsScrapeChecked(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
+                      2. Generate New Leads (scrape)
+                    </label>
+                    {isScrapeChecked && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "14px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>City</label>
+                            <input type="text" placeholder="e.g. Austin" value={scrapeCity} onChange={(e) => setScrapeCity(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>State</label>
+                            <input type="text" placeholder="e.g. TX" value={scrapeState} onChange={(e) => setScrapeState(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Radius (km)</label>
+                            <input type="number" placeholder="e.g. 25" value={scrapeRadius} onChange={(e) => setScrapeRadius(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Business Type</label>
+                            <input type="text" placeholder="e.g. Dental Clinic" value={scrapeBusinessType} onChange={(e) => setScrapeBusinessType(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "8px", display: "block" }}>Sources <span style={{ color: "#8A90A0", fontWeight: 500 }}>(click to toggle — any combination)</span></label>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            {["Google Maps", "Yellow Pages", "Hotfrog"].map((s) => {
+                              const on = scrapeSources.includes(s);
+                              return (
+                                <span
+                                  key={s}
+                                  onClick={() => setScrapeSources(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
+                                  style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", background: on ? "#F4F5FF" : "#F4F5F7", border: on ? "1px solid #C7CBF5" : "1px solid #ECEEF2", color: on ? "#4F46FF" : "#A0A6B4", fontSize: "11px", fontWeight: 600, cursor: "pointer", userSelect: "none" }}
+                                >
+                                  {on ? "✓ " : ""}{s}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div style={{ maxWidth: "220px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Leads per run <span style={{ color: "#8A90A0", fontWeight: 500 }}>(cost control — each scraped lead has a real Apify cost)</span></label>
+                          <input type="number" value={maxLeadsPerRun} onChange={(e) => setMaxLeadsPerRun(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 3: Enrich Leads */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 700, color: "#1F2433", cursor: "pointer" }}>
+                      <input type="checkbox" checked={enrichEnabled} onChange={(e) => setEnrichEnabled(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
+                      3. Enrich Leads (research each one)
+                    </label>
+                    <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0 }}>Works on any lead already in the list — scraped above or already uploaded for this client. Not dependent on Section 2.</p>
+                    {enrichEnabled && (
+                      <div style={{ borderTop: "1px solid #ECEEF2", paddingTop: "14px", maxWidth: "280px" }}>
+                        <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Enrichment Depth</label>
+                        <select
+                          value={enrichmentDepth}
+                          onChange={(e) => setEnrichmentDepth(e.target.value)}
+                          style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", fontFamily: "inherit", outline: "none", background: "#FFFFFF" }}
+                        >
+                          {["Basic (name + phone)", "Standard Profile + Website", "Deep (profile + website + email + ICP fit)"].map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {serviceApiError && (
+                    <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#B91C1C" }}>
+                      {serviceApiError}
+                    </div>
+                  )}
+
+                  {/* Form Footer Action Buttons — manual only, no auto-run/schedule here (that's a future client-dashboard "Run" button) */}
+                  <div style={{ display: "flex", justifySelf: "flex-end", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "16px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfiguringService(null)}
+                      style={{ background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "10px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 150ms ease" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingService}
+                      onClick={handleActivateService}
+                      style={{ background: isSavingService ? "#CBD2DD" : "#22C55E", color: "#FFFFFF", border: "none", borderRadius: "10px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: isSavingService ? "not-allowed" : "pointer", fontFamily: "inherit", transition: "background 150ms ease" }}
+                      onMouseEnter={(e) => { if (!isSavingService) e.currentTarget.style.background = "#16A34A"; }}
+                      onMouseLeave={(e) => { if (!isSavingService) e.currentTarget.style.background = "#22C55E"; }}
+                    >
+                      {isSavingService ? "Saving..." : (onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service")}
+                    </button>
+                  </div>
+                </div>
               ) : (
-                /* Centered Coming Soon Placeholder for the other 8 service IDs */
+                /* Centered Coming Soon Placeholder for List Cleaning (the one remaining unbuilt service) */
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px", border: "1px solid #ECEEF2", borderRadius: "12px", background: "#FFFFFF", textAlign: "center", marginTop: "10px" }}>
                   <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

@@ -56,12 +56,10 @@ Each heading is something a client would actually recognise and pay for as a dis
   *Sold separately because:* this is the one genuine engine difference inside inbound — booking is turned off and it only captures.
 
 ### Mode 5 — Data only (no calling)
-- **Lead Generation** — a clean, deduped list of target businesses with phone numbers.
-  *Merged in:* **ICP Prospecting** — same scrape; it just turns a sentence describing the ideal customer into the search terms. A setting, not a service.
+- **Lead Generation & Enrichment** — a clean, deduped list of target businesses with phone numbers, each researched (website, email, profile, fit, and optional buying-intent signal).
+  *Merged in:* **ICP Prospecting** (same scrape, a sentence describing the ideal customer turns into search terms — a setting, not a service) **and Lead Enrichment** (2026-07-02: decided against selling separately — enrichment was never actually dependent on generation in the engine, it researches whatever's in the lead list whether that list was scraped here or brought/uploaded by the client. Generate and Enrich are two independent toggles on the same screen, not two products).
 - **List Cleaning** — validate numbers, remove duplicates, scrub opt-outs, tag timezones.
   *Merged in:* those four were never separate — they're the steps that all run together when you clean a list.
-- **Lead Enrichment** — send us a list, get each one researched (website, email, profile, fit).
-  *Sold separately because:* different input — with Lead Gen we *find* the list; with Enrichment the client *brings* the list and we deepen it.
 
 ### The bundle
 - **Full Funnel / Done-For-You** — find leads → call and book → answer the callbacks. Mode 5 + Mode 1 + Mode 4 sold as one managed package. Not new tech; a premium wrapper.
@@ -71,10 +69,10 @@ Each heading is something a client would actually recognise and pay for as a dis
 ## The honest count
 
 - **Engine modes we actually build & maintain:** **5**.
-- **Things we can sell as genuinely separate:** **9** — Outbound Sales · Reactivation & Renewals · Lead Qualification · Appointment Reminders · AI Receptionist · Support Line · Lead Generation · List Cleaning · Lead Enrichment — **plus the Full Funnel bundle**.
-- **Names that were never separate products** (now scripts/settings): AI SDR vs Appointment Setting · Database Reactivation vs Win-back · Survey · Recruitment Screening · the 3 reminder types · the 4 cleaning steps · the 3 receptionist hour-modes · ICP Prospecting.
+- **Things we can sell as genuinely separate:** **8** (was 9 — Lead Generation and Lead Enrichment merged 2026-07-02, see Mode 5 above) — Outbound Sales · Reactivation & Renewals · Lead Qualification · Appointment Reminders · AI Receptionist · Support Line · Lead Generation & Enrichment · List Cleaning — **plus the Full Funnel bundle**.
+- **Names that were never separate products** (now scripts/settings): AI SDR vs Appointment Setting · Database Reactivation vs Win-back · Survey · Recruitment Screening · the 3 reminder types · the 4 cleaning steps · the 3 receptionist hour-modes · ICP Prospecting · Lead Enrichment (a toggle on Lead Generation, not its own product).
 
-> **5 real machines · ~9–10 things to sell · a pile of names that are just scripts on top.** Sell the names clients recognise; never pretend they're different products underneath.
+> **5 real machines · ~8–9 things to sell · a pile of names that are just scripts on top.** Sell the names clients recognise; never pretend they're different products underneath.
 
 ---
 
@@ -90,9 +88,8 @@ The code already models exactly this — each sellable service is a preset, and 
 | Appointment Reminders | `ai_reminders` | `confirmation`, `no_show_recovery`, `event_reminder` |
 | AI Receptionist | `inbound_receptionist` | hours via `calling_window` setting |
 | Support / Complaint Line | `complaint_intake` | — (booking off, capture only) |
-| Lead Generation | `lead_gen` | `icp_prospecting` (search terms from ICP text) |
+| Lead Generation & Enrichment | `lead_gen` + `lead_enrich` (both, stacked — generation and enrichment are independent toggles, not separate presets to choose between) | `icp_prospecting` (search terms from ICP text) |
 | List Cleaning | `list_clean` | runs validate + dedupe + opt-out + timezone together |
-| Lead Enrichment | `lead_enrich` | — |
 | Full Funnel (bundle) | `lead_gen` + `outbound_sales` + `inbound_receptionist` | stacked |
 
-> The onboarding UI should follow this: pick one of the **9 sellable services**, then a **script variant** where it has one, then the **list source** — not 20 separate buttons.
+> The onboarding UI should follow this: pick one of the **8 sellable services**, then a **script variant** where it has one, then the **list source** — not 20 separate buttons.
