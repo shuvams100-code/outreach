@@ -444,6 +444,14 @@ export default function Home() {
   const [reminderTimingValue, setReminderTimingValue] = useState("1");
   const [reminderTimingUnit, setReminderTimingUnit] = useState("hours");
 
+  // Inbound Services states
+  const [inboundNumbers, setInboundNumbers] = useState([{ number: "" }]);
+  const [coverageMode, setCoverageMode] = useState("business_hours");
+  const [warmTransferEnabled, setWarmTransferEnabled] = useState(false);
+  const [warmTransferNumber, setWarmTransferNumber] = useState("");
+  const [warmTransferHoursStart, setWarmTransferHoursStart] = useState("09:00");
+  const [warmTransferHoursEnd, setWarmTransferHoursEnd] = useState("18:00");
+
   // Section 4: Offer & Knowledge
   const [clientOffer, setClientOffer] = useState("");
   const [knowledgeBase, setKnowledgeBase] = useState("");
@@ -831,8 +839,9 @@ Always handle objections politely.`;
   };
 
   const handleActivateService = () => {
-    // Lead Qualification (capture-only) and Appointment Reminders need no meeting; otherwise required.
-    const needsMeeting = !(configuringService === "Lead Qualification" && !recruitmentEnabled) && configuringService !== "Appointment Reminders";
+    // Lead Qualification (without recruitment), Appointment Reminders, and Support Line need no meeting; otherwise required.
+    const noMeetingServices = ["Lead Qualification", "Appointment Reminders", "Support / Complaint Line"];
+    const needsMeeting = !noMeetingServices.includes(configuringService) || (configuringService === "Lead Qualification" && recruitmentEnabled);
     if (needsMeeting && !meetingMode) return; // required check
     const c = onboardedClient;
     if (!c) return;
@@ -848,6 +857,8 @@ Always handle objections politely.`;
       meetingLength, meetingBuffer, bookingCapacity,
       qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
       remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
+      inboundNumbers: inboundNumbers.filter(p => p.number.trim() !== ""),
+      coverageMode, warmTransferEnabled, warmTransferNumber, warmTransferHoursStart, warmTransferHoursEnd,
       phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
@@ -880,6 +891,8 @@ Always handle objections politely.`;
       meetingLength, meetingBuffer, bookingCapacity,
       qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
       remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
+      inboundNumbers: inboundNumbers.filter(p => p.number.trim() !== ""),
+      coverageMode, warmTransferEnabled, warmTransferNumber, warmTransferHoursStart, warmTransferHoursEnd,
       phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
@@ -5703,6 +5716,745 @@ Always handle objections politely.`;
                   </div>
 
                 </div>
+              ) : (configuringService === "AI Receptionist" || configuringService === "Support / Complaint Line") ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
+                  {/* Inbound Form — shared by AI Receptionist and Support / Complaint Line */}
+                  
+                  {/* Section 1: Inbound Number & Coverage */}
+                  {(() => {
+                    const isConfigured = inboundNumbers.some(p => p.number.trim() !== "") && coverageMode.trim() !== "";
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Inbound Number &amp; Coverage</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set up the phone lines that route to this agent and when it answers calls.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Phone numbers pool list */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Inbound Phone Number(s)</label>
+                          {inboundNumbers.map((p, idx) => (
+                            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <input
+                                type="text"
+                                placeholder="+1 (555) 000-0000"
+                                value={p.number}
+                                onChange={(e) => {
+                                  const updated = [...inboundNumbers];
+                                  updated[idx] = { number: e.target.value };
+                                  setInboundNumbers(updated);
+                                }}
+                                style={{ flex: 1, padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                              />
+                              {inboundNumbers.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setInboundNumbers(prev => prev.filter((_, i) => i !== idx))}
+                                  style={{ background: "#FEE2E2", color: "#EF4444", border: "none", borderRadius: "8px", width: "32px", height: "32px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "background 150ms ease" }}
+                                  onMouseEnter={(e) => e.currentTarget.style.background = "#FCA5A5"}
+                                  onMouseLeave={(e) => e.currentTarget.style.background = "#FEE2E2"}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setInboundNumbers(prev => [...prev, { number: "" }])}
+                            style={{ background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "8px", padding: "8px 12px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-start", marginTop: "4px" }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                          >
+                            + Add Number
+                          </button>
+                          <span style={{ fontSize: "11px", color: "#8A90A0", marginTop: "2px" }}>
+                            Callers dial this number, or forward their existing line here.
+                          </span>
+                        </div>
+
+                        {/* Coverage Segmented Choice */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Coverage Mode</label>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            {[
+                              { value: "business_hours", label: "Business Hours", desc: "Answers during calling hours below" },
+                              { value: "after_hours", label: "After-Hours / Overflow", desc: "Only nights, weekends, or when busy" },
+                              { value: "24x7", label: "24/7 Coverage", desc: "Answers every call, day or night" }
+                            ].map((opt) => {
+                              const isSelected = coverageMode === opt.value;
+                              return (
+                                <div
+                                  key={opt.value}
+                                  onClick={() => setCoverageMode(opt.value)}
+                                  style={{
+                                    flex: 1,
+                                    padding: "10px 12px",
+                                    borderRadius: "8px",
+                                    cursor: "pointer",
+                                    border: isSelected ? "2px solid #4F46FF" : "1px solid #ECEEF2",
+                                    background: isSelected ? "#F4F5FF" : "#FFFFFF",
+                                    transition: "all 150ms ease"
+                                  }}
+                                >
+                                  <div style={{ fontSize: "12px", fontWeight: 700, color: isSelected ? "#4F46FF" : "#1F2433" }}>{opt.label}</div>
+                                  <div style={{ fontSize: "10px", color: "#8A90A0", marginTop: "2px" }}>{opt.desc}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Calling Hours (Business hours or After-hours only) */}
+                        {coverageMode !== "24x7" && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Hours Start</label>
+                              <input
+                                type="time"
+                                value={callingHoursStart}
+                                onChange={(e) => setCallingHoursStart(e.target.value)}
+                                style={{ padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Hours End</label>
+                              <input
+                                type="time"
+                                value={callingHoursEnd}
+                                onChange={(e) => setCallingHoursEnd(e.target.value)}
+                                style={{ padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
+                              <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Timezone</label>
+                              <select
+                                value={callingTimezone}
+                                onChange={(e) => setCallingTimezone(e.target.value)}
+                                style={{ width: "100%", padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none", background: "#FFFFFF", cursor: "pointer" }}
+                              >
+                                {["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Asia/Kolkata"].map((tz) => (
+                                  <option key={tz} value={tz}>{TIMEZONE_LABEL(tz)}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 2: Warm Transfer / Escalation */}
+                  {(() => {
+                    const isConfigured = !warmTransferEnabled || (warmTransferNumber.trim() !== "" && warmTransferHoursStart.trim() !== "" && warmTransferHoursEnd.trim() !== "");
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>2. Warm Transfer / Escalation</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Configure when and how the AI agent transfers call to a live human rep.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={warmTransferEnabled}
+                            onChange={(e) => setWarmTransferEnabled(e.target.checked)}
+                            style={{ accentColor: "#4F46FF", cursor: "pointer" }}
+                          />
+                          <span>Transfer to a human when needed</span>
+                        </label>
+
+                        {warmTransferEnabled && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                            <div>
+                              <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Transfer-to Phone Number</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. +1 (555) 019-9988"
+                                value={warmTransferNumber}
+                                onChange={(e) => setWarmTransferNumber(e.target.value)}
+                                style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Transfer Hours Start</label>
+                                <input
+                                  type="time"
+                                  value={warmTransferHoursStart}
+                                  onChange={(e) => setWarmTransferHoursStart(e.target.value)}
+                                  style={{ padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Transfer Hours End</label>
+                                <input
+                                  type="time"
+                                  value={warmTransferHoursEnd}
+                                  onChange={(e) => setWarmTransferHoursEnd(e.target.value)}
+                                  style={{ padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                />
+                              </div>
+                              <span style={{ fontSize: "12px", color: "#8A90A0", marginTop: "16px" }}>Only offer a transfer during these hours.</span>
+                            </div>
+                            <span style={{ fontSize: "11px", color: "#8A90A0", marginTop: "4px" }}>
+                              The agent stays on the line and connects the caller live to this number — but only during the hours above. Outside these hours, it takes a message instead.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 3: Knowledge Base (REUSE existing, no offer) */}
+                  {(() => {
+                    const isConfigured = knowledgeBase.trim() !== "";
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifySelf: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>3. Knowledge Base</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Core info the agent uses to answer questions on the call.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Knowledge Base (FAQs &amp; Business Info)</label>
+                          <textarea
+                            placeholder="e.g. Business hours are 8am-6pm. We accept major insurances. Dr. Smith has 15 years experience..."
+                            value={knowledgeBase}
+                            onChange={(e) => setKnowledgeBase(e.target.value)}
+                            style={{
+                              width: "100%",
+                              minHeight: "100px",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              fontFamily: "inherit",
+                              resize: "vertical",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+
+                        {/* File Upload Zone */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Attached Knowledge Documents</label>
+                          <div
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const files = Array.from(e.dataTransfer.files).map(f => f.name);
+                              setAttachedDocuments(prev => Array.from(new Set([...prev, ...files])));
+                            }}
+                            style={{ border: "2px dashed #ECEEF2", borderRadius: "10px", padding: "20px", textAlign: "center", cursor: "pointer", background: "#F9FAFB" }}
+                            onClick={() => {
+                              const files = [`FAQ-Inbound-Doc-${Math.floor(Math.random() * 1000)}.pdf`];
+                              setAttachedDocuments(prev => Array.from(new Set([...prev, ...files])));
+                            }}
+                          >
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 8px" }}>
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            <span style={{ fontSize: "12px", color: "#1F2433", fontWeight: 600 }}>Drag files here, or click to browse</span>
+                            <span style={{ fontSize: "10px", color: "#8A90A0", display: "block", marginTop: "2px" }}>Supports PDF, TXT, DOCX up to 10MB</span>
+                          </div>
+                          {attachedDocuments.length > 0 && (
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
+                              {attachedDocuments.map(name => (
+                                <span key={name} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#F4F5FF", border: "1px solid #ECEEF2", borderRadius: "6px", padding: "4px 8px", fontSize: "11px", fontWeight: 500, color: "#4F46FF" }}>
+                                  {name}
+                                  <span onClick={() => setAttachedDocuments(prev => prev.filter(x => x !== name))} style={{ cursor: "pointer", fontWeight: 700, color: "#8A90A0" }}>×</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 4: What it does (read-only chips) */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>4. What it does (Agent Capabilities)</span>
+                      <span style={{ fontSize: "11px", color: "#8A90A0" }}>Locked capability flags enabled for this inbound service variant.</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+                      {configuringService === "AI Receptionist" ? (
+                        ["Check availability", "Book appointment", "Take a message", "Opt-out (TCPA)"].map(chip => (
+                          <span key={chip} style={{ background: "#ECFDF5", color: "#10B981", border: "1px solid #A7F3D0", padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600 }}>
+                            {chip}
+                          </span>
+                        ))
+                      ) : (
+                        ["Take a message / log issue", "Opt-out (TCPA)"].map(chip => (
+                          <span key={chip} style={{ background: "#ECFDF5", color: "#10B981", border: "1px solid #A7F3D0", padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600 }}>
+                            {chip}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section 5: The Meeting section (AI Receptionist only) */}
+                  {configuringService === "AI Receptionist" && (() => {
+                    const isConfigured = !!meetingMode;
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifySelf: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>5. The Meeting</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set up the calendar details so the AI agent can book meetings for you.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Meeting Mode choice */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Meeting Location Mode</label>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            {["Online", "In-person", "Both"].map((mode) => {
+                              const isSelected = meetingMode === mode;
+                              return (
+                                <div
+                                  key={mode}
+                                  onClick={() => setMeetingMode(mode)}
+                                  style={{
+                                    flex: 1,
+                                    padding: "10px",
+                                    borderRadius: "8px",
+                                    cursor: "pointer",
+                                    border: isSelected ? "2px solid #4F46FF" : "1px solid #ECEEF2",
+                                    background: isSelected ? "#F4F5FF" : "#FFFFFF",
+                                    textAlign: "center",
+                                    fontSize: "12.5px",
+                                    fontWeight: 700,
+                                    color: isSelected ? "#4F46FF" : "#1F2433",
+                                    transition: "all 150ms ease"
+                                  }}
+                                >
+                                  {mode}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Conditionals based on meetingMode */}
+                        {(meetingMode === "Online" || meetingMode === "Both") && (
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Google Meet / Calendly Link</label>
+                            <input
+                              type="text"
+                              placeholder="https://calendly.com/your-username"
+                              value={meetingLink}
+                              onChange={(e) => setMeetingLink(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                        )}
+                        {(meetingMode === "In-person" || meetingMode === "Both") && (
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Physical Address</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 120 Congress Ave, Austin, TX"
+                              value={meetingAddress}
+                              onChange={(e) => setMeetingAddress(e.target.value)}
+                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Meeting Parameters */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Length (Min)</label>
+                            <input
+                              type="number"
+                              value={meetingLength}
+                              onChange={(e) => setMeetingLength(e.target.value)}
+                              style={{ width: "100%", padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Buffer (Min)</label>
+                            <input
+                              type="number"
+                              value={meetingBuffer}
+                              onChange={(e) => setMeetingBuffer(e.target.value)}
+                              style={{ width: "100%", padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Daily Cap</label>
+                            <input
+                              type="number"
+                              value={bookingCapacity}
+                              onChange={(e) => setBookingCapacity(e.target.value)}
+                              style={{ width: "100%", padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Availability Windows */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Availability Windows</label>
+                          {availabilityWindows.map((win, idx) => (
+                            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <select
+                                value={win.day}
+                                onChange={(e) => {
+                                  const updated = [...availabilityWindows];
+                                  updated[idx].day = e.target.value;
+                                  setAvailabilityWindows(updated);
+                                }}
+                                style={{ flex: 1, padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", background: "#FFFFFF", color: "#1F2433" }}
+                              >
+                                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="time"
+                                value={win.start}
+                                onChange={(e) => {
+                                  const updated = [...availabilityWindows];
+                                  updated[idx].start = e.target.value;
+                                  setAvailabilityWindows(updated);
+                                }}
+                                style={{ padding: "6px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12.5px" }}
+                              />
+                              <span style={{ fontSize: "12px", color: "#8A90A0" }}>to</span>
+                              <input
+                                type="time"
+                                value={win.end}
+                                onChange={(e) => {
+                                  const updated = [...availabilityWindows];
+                                  updated[idx].end = e.target.value;
+                                  setAvailabilityWindows(updated);
+                                }}
+                                style={{ padding: "6px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12.5px" }}
+                              />
+                              {availabilityWindows.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAvailabilityWindows(prev => prev.filter((_, i) => i !== idx))}
+                                  style={{ background: "#FEE2E2", color: "#EF4444", border: "none", borderRadius: "8px", width: "30px", height: "30px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setAvailabilityWindows(prev => [...prev, { day: "Monday", start: "09:00", end: "17:00" }])}
+                            style={{ background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "8px", padding: "8px 12px", fontSize: "11px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                          >
+                            + Add Window
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 6: Agent & Script */}
+                  {(() => {
+                    const isConfigured = scriptText.trim() !== "" && openingLine.trim() !== "" && successMetric.trim() !== "";
+                    return (
+                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifySelf: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{configuringService === "AI Receptionist" ? "6. Agent &amp; Script" : "5. Agent &amp; Script"}</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Define the AI calling script variant, instructions, and voice preferences.</span>
+                          </div>
+                          {isConfigured ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                              Configured ✓
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                              Needs input
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Opening Line */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Greeting Opening Line</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Thanks for calling Sunrise Dental — how can I help you today?"
+                            value={openingLine}
+                            onChange={(e) => setOpeningLine(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                          />
+                          <span style={{ fontSize: "11px", color: "#8A90A0", display: "block", marginTop: "2px" }}>
+                            The very first sentence the agent says when they answer the call.
+                          </span>
+                        </div>
+
+                        {/* Script instructions */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>AI Script / Scenario Instructions</label>
+                          <textarea
+                            value={scriptText}
+                            onChange={(e) => setScriptText(e.target.value)}
+                            style={{
+                              width: "100%",
+                              minHeight: "130px",
+                              padding: "10px 12px",
+                              border: "1px solid #ECEEF2",
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              color: "#1F2433",
+                              fontFamily: "inherit",
+                              resize: "vertical",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+
+                        {/* Success Metric */}
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Call Goal / Success Outcome</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Booking confirmed or message captured for callback"
+                            value={successMetric}
+                            onChange={(e) => setSuccessMetric(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                          />
+                        </div>
+
+                        {/* Voice & Model Choice Row */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                          {/* Voice Selection */}
+                          <div ref={voiceRef} style={{ position: "relative" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Voice Profile Selection</label>
+                            <div
+                              onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
+                              style={{ display: "flex", alignItems: "center", justifySelf: "space-between", padding: "8px 10px", border: isVoiceDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
+                            >
+                              <span>{voiceSelection === "default" ? "Default voice (11labs)" : voiceSelection}</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoiceDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </div>
+                            {isVoiceDropdownOpen && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                                {["Default voice (11labs)", "Rachel (Friendly)", "Drew (Professional)", "Marcus (Energetic)"].map((v) => (
+                                  <div
+                                    key={v}
+                                    onClick={() => { setVoiceSelection(v === "Default voice (11labs)" ? "default" : v); setIsVoiceDropdownOpen(false); }}
+                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: (voiceSelection === "default" && v === "Default voice (11labs)") || voiceSelection === v ? "#4F46FF" : "#5A6072", background: (voiceSelection === "default" && v === "Default voice (11labs)") || voiceSelection === v ? "#F4F5FF" : "transparent", fontWeight: (voiceSelection === "default" && v === "Default voice (11labs)") || voiceSelection === v ? 600 : 500 }}
+                                    onMouseEnter={(e) => { if (voiceSelection !== v) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (voiceSelection !== v) e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    {v}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Model Selection */}
+                          <div ref={modelRef} style={{ position: "relative" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Underlying LLM Engine</label>
+                            <div
+                              onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                              style={{ display: "flex", alignItems: "center", justifySelf: "space-between", padding: "8px 10px", border: isModelDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
+                            >
+                              <span>{modelSelection}</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isModelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </div>
+                            {isModelDropdownOpen && (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                                {["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet", "llama-3.1-70b"].map((m) => (
+                                  <div
+                                    key={m}
+                                    onClick={() => { setModelSelection(m); setIsModelDropdownOpen(false); }}
+                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: modelSelection === m ? "#4F46FF" : "#5A6072", background: modelSelection === m ? "#F4F5FF" : "transparent", fontWeight: modelSelection === m ? 600 : 500 }}
+                                    onMouseEnter={(e) => { if (modelSelection !== m) e.currentTarget.style.background = "#F7F8FA"; }}
+                                    onMouseLeave={(e) => { if (modelSelection !== m) e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    {m}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Section 7: Collapsed Advanced Cards */}
+                  {/* Surfaced Auto-Config Section 3: Compliance */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isComplianceCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsComplianceCollapsed(!isComplianceCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifySelf: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isComplianceCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Compliance &amp; Calling Window</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isComplianceCollapsed && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <p style={{ margin: 0, fontSize: "11px", color: "#8A90A0" }}>These stay on for every calling agent — legal/safety, not editable.</p>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
+                          DNC Scrub (opt-out list) <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
+                          Opt-out keyword detection (TCPA) <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
+                          Respect lead timezone call windows <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Surfaced Auto-Config Section 6: Call Limits */}
+                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isCallLimitsCollapsed ? "0" : "14px" }}>
+                    <div
+                      onClick={() => setIsCallLimitsCollapsed(!isCallLimitsCollapsed)}
+                      style={{ display: "flex", alignItems: "center", justifySelf: "space-between", cursor: "pointer", userSelect: "none" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCallLimitsCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Calling Limits &amp; Batching</span>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                        Configured ✓
+                      </span>
+                    </div>
+                    {!isCallLimitsCollapsed && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                        <div>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Call Length (Min)</label>
+                          <input type="number" value={maxCallLength} onChange={(e) => setMaxCallLength(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Form Footer Action Buttons */}
+                  <div style={{ display: "flex", justifySelf: "flex-end", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "16px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfiguringService(null)}
+                      style={{
+                        background: "#F4F5FF",
+                        color: "#4F46FF",
+                        border: "none",
+                        borderRadius: "10px",
+                        padding: "10px 20px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        transition: "all 150ms ease"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
+                    >
+                      Cancel
+                    </button>
+                    {(() => {
+                      // Support / Complaint Line can activate without a meeting, AI Receptionist needs a meeting.
+                      const canActivate = (configuringService === "Support / Complaint Line") || !!meetingMode;
+                      return (
+                        <button
+                          type="button"
+                          disabled={!canActivate}
+                          onClick={handleActivateService}
+                          style={{
+                            background: canActivate ? "#22C55E" : "#CBD2DD",
+                            color: "#FFFFFF",
+                            border: "none",
+                            borderRadius: "10px",
+                            padding: "10px 20px",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            cursor: canActivate ? "pointer" : "not-allowed",
+                            fontFamily: "inherit",
+                            transition: "background 150ms ease"
+                          }}
+                          onMouseEnter={(e) => { if (canActivate) e.currentTarget.style.background = "#16A34A"; }}
+                          onMouseLeave={(e) => { if (canActivate) e.currentTarget.style.background = "#22C55E"; }}
+                        >
+                          {onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service"}
+                        </button>
+                      );
+                    })()}
+                  </div>
+
+                </div>
               ) : (
                 /* Centered Coming Soon Placeholder for the other 8 service IDs */
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px", border: "1px solid #ECEEF2", borderRadius: "12px", background: "#FFFFFF", textAlign: "center", marginTop: "10px" }}>
@@ -5940,6 +6692,39 @@ Always handle objections politely.`;
                                     ].filter(Boolean).join(", ") || "None"}
                                   </span>
                                 </div>
+                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
+                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.scriptText}</span>
+                                </div>
+                              </div>
+                            ) : (svcId === "AI Receptionist" || svcId === "Support / Complaint Line") && config ? (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Coverage Mode</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {config.coverageMode === "24x7" ? "24/7 Coverage" : `${config.coverageMode === "business_hours" ? "Business Hours" : "After-Hours / Overflow"} (${config.callingHoursStart || "09:00"} to ${config.callingHoursEnd || "18:00"} ${config.callingTimezone})`}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Inbound Line(s)</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {(config.inboundNumbers || []).map(p => p.number).filter(Boolean).join(", ") || "None configured"}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Warm Transfer</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {config.warmTransferEnabled ? `Enabled (to ${config.warmTransferNumber || "not set"} from ${config.warmTransferHoursStart || "09:00"} to ${config.warmTransferHoursEnd || "18:00"})` : "Disabled"}
+                                  </span>
+                                </div>
+                                {svcId === "AI Receptionist" && (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <span style={{ fontWeight: 600, color: "#5A6072" }}>Meeting Mode</span>
+                                    <span style={{ color: "#1F2433" }}>
+                                      {config.meetingMode ? `${config.meetingMode} (${config.meetingMode === "Online" || config.meetingMode === "Both" ? (config.meetingLink || "No link") : ""} ${config.meetingMode === "In-person" || config.meetingMode === "Both" ? (config.meetingAddress || "No address") : ""})` : "Not configured"}
+                                    </span>
+                                  </div>
+                                )}
                                 <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
                                   <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.scriptText}</span>
