@@ -1,6 +1,15 @@
 import { supabase } from "./lib/supabase";
 import { callContact } from "./call";
+import { scrapeAccount } from "./scrape";
+import { enrichAccount } from "./enrich";
+import { scrubAccount } from "./compliance";
 import type { RetryRules } from "./outcome";
+
+// An active calling service means this account has an agent that actually dials — scraping chosen as
+// ITS lead source should feed the daily cycle automatically, never a separate manual step. The standalone
+// "Lead Generation & Enrichment" service (no calling service active) never reaches runDailyAccount at all,
+// so it's unaffected — that one stays manual, by design (there's no agent here to feed).
+const CALLING_SERVICES = ["Outbound Sales / Appt Setting", "Reactivation & Renewals", "Lead Qualification"];
 
 export type Candidate = { id: string; phone: string; first_name?: string | null; timezone?: string | null };
 
@@ -105,7 +114,7 @@ const hourOf = (t: string | null | undefined, fallback: number) =>
 export async function runDailyAccount(accountId: string, now: Date = new Date()) {
   const { data: acct, error } = await supabase
     .from("accounts")
-    .select("status, daily_dial_cap, retry_rules, calling_hours_start, calling_hours_end, booking_capacity, balance")
+    .select("status, daily_dial_cap, retry_rules, calling_hours_start, calling_hours_end, booking_capacity, balance, scraping_enabled, refill_threshold, active_services")
     .eq("id", accountId)
     .single();
   if (error || !acct) throw new Error(`Account ${accountId} not found: ${error?.message}`);
@@ -122,6 +131,30 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
     .eq("status", "open");
   if (atCapacity(openBookings ?? 0, acct.booking_capacity)) {
     return { skipped: "at booking capacity" as const, openBookings: openBookings ?? 0, capacity: acct.booking_capacity };
+  }
+
+  // Auto lead-refill: an active calling service that chose scraping as its lead source feeds itself —
+  // no separate manual "run lead generation" click. Scraping Refill Guard (per the build spec): only
+  // scrape more when the ready-to-call backlog is actually running low, since every scraped/enriched
+  // lead has a real Apify/LLM cost — don't re-buy leads the account already has sitting in `scrubbed`.
+  let refillError: string | undefined;
+  const hasCallingService = ((acct.active_services as string[]) ?? []).some((s) => CALLING_SERVICES.includes(s));
+  if (acct.scraping_enabled && hasCallingService) {
+    const { count: backlog } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", accountId)
+      .eq("state", "scrubbed");
+    if ((backlog ?? 0) < (acct.refill_threshold ?? 20)) {
+      try {
+        await scrapeAccount(accountId);
+        await enrichAccount(accountId);
+        await scrubAccount(accountId);
+      } catch (e) {
+        refillError = (e as Error).message;
+        console.error(`Auto lead-refill failed for account ${accountId}:`, refillError);
+      }
+    }
   }
 
   // Reap leads stranded in `calling` by a crashed/killed run (older than an hour) → back to scrubbed,
@@ -191,5 +224,6 @@ export async function runDailyAccount(accountId: string, now: Date = new Date())
     outsideWindow: list.length - callable.length,
     dialed,
     errors,
+    refillError,
   };
 }

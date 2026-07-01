@@ -97,15 +97,20 @@ The client list/directory *does* show real accounts now (merged in via `GET /api
 
 Data-only, no calling agent. Two independent toggles, not a forced pipeline — enrichment was never actually dependent on generation (`enrichAccount` enriches whatever's `state: 'new'` in `leads`, scraped or uploaded, it doesn't care which).
 
+**Two different ways this runs, on purpose (2026-07-02 clarification):**
+1. **Standalone** — client bought only this service, no calling service active on the account. Manual, by decision: nothing auto-triggers it. A "Run" action belongs on a future client-facing dashboard (not built, not started).
+2. **Bundled into an active calling service** (Outbound Sales / Reactivation / Lead Qualification) that chose scraping as its lead source (`isScrapeChecked` in that service's own config, same as before this merge) — this must run **automatically**, never a separate manual click, because the calling agent has nothing to dial otherwise. Built into `runDailyAccount` itself (see below) — one entry point does both refill and dial.
+
 | Field / control | Mock now | Wire to | Where |
 |---|---|---|---|
 | 🟢 ICP Description | persisted via Activate/Save Draft, same as the outbound forms | — | `accounts.icp_description` |
 | 🟢 Buying Intent Signal (new field) | persisted; optional free text | soft signal only — see `enrich.ts` below, never disqualifies | `accounts.intent_signal_description` |
 | 🟢 Generate New Leads toggle + city/state/radius/business type + sources (any combination) + leads-per-run | persisted | — | `accounts.geo_city/geo_state/geo_radius_km`, `accounts.sources`, `accounts.lead_cap_per_run` |
 | 🟢 Enrich Leads toggle + depth | persisted | — | `accounts.enrichment_enabled/enrichment_depth` |
-| 🔴 Manual "Run" trigger | **by explicit decision, not built here** — no auto/scheduled option in this screen at all | belongs on a future client-facing dashboard (not built, not started) | — |
+| 🔴 Standalone manual "Run" trigger | **by explicit decision, not built here** — no auto/scheduled option in this screen at all | belongs on a future client-facing dashboard (not built, not started) | — |
+| 🟢 **Bundled auto-refill** | `runDailyAccount` (`daily.ts`) now checks: does this account have an active calling service (`Outbound Sales / Appt Setting`, `Reactivation & Renewals`, `Lead Qualification`) AND `scraping_enabled`? If yes AND the `scrubbed` backlog is below `refill_threshold` (the documented **Scraping Refill Guard** from `docs/build-plan.md` — was speced, never wired until now), it runs `scrapeAccount` → `enrichAccount` → `scrubAccount` automatically before selecting the day's call list. Failures are caught so a bad scrape never blocks dialing the existing backlog (`refillError` surfaced in the return value). | — | `daily.ts` `runDailyAccount` |
 | 🟢 **Backend: intent scoring** | `enrich.ts`'s existing Tavily+LLM call now also returns `intent_match`/`intent_evidence` in the same JSON response (zero new API spend) when `intent_signal_description` is set | soft signal — `fits_icp` alone still decides `enriched` vs `disqualified`; intent never disqualifies, only tags/ranks | `leads.intent_match`, `leads.intent_evidence` |
-| ⚠️ Still no cron/scheduler exists anywhere for scrape/enrich (unlike calling's `daily.ts`/`runDailyAccount`) — today both only run via one-off scripts (`scripts/scrape-tenant0.ts`, `scripts/enrich-tenant0.ts`), one tenant at a time. Matches the manual-only decision above, but flagging so it isn't mistaken for an oversight later. | n/a | a per-account daily/on-demand orchestrator, only if/when the client-facing "Run" button gets built | `daily.ts` has the pattern to copy |
+| ⚠️ **Correction to an earlier note in this doc:** there is no cron/scheduler anywhere in the repo for *anything* yet — not scrape/enrich, and not calling either. `runDailyAccount` is a callable orchestrator, but nothing periodically invokes it per-account today; it only runs via the tenant-0-only `scripts/daily-tenant0.ts`. The auto-refill above means that whenever `runDailyAccount` *does* run (by hand today, by real Vercel Cron once that's built), lead refill and dialing happen as one call — no separate manual lead-gen step needed for the bundled case. | n/a | real multi-tenant cron (Vercel Cron per `docs/build-plan.md`'s "Daily Vercel Cron" spec) is still the actual missing piece platform-wide | — |
 
 ---
 
