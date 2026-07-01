@@ -75,6 +75,7 @@ Today the **entire frontend is mock** — no screen talks to Supabase or the bac
 | 🔴 VAPI phone-number provisioning | not built | buy/assign numbers via VAPI API |
 | 🔴 Knowledge-base file ingestion | not built | Supabase Storage + extraction step |
 | 🔴 Auto-generate agent script | not built (frontend idea) | LLM call from config → `system_prompt` |
+| 🟡 Reminder sweep (`reminders.ts`) — paid gating | sweep exists (1-hr confirm/reschedule on bookings), but runs unconditionally | **gate it:** only run for accounts that have the **Appointment Reminders** service active AND the "auto-remind our booked meetings" link enabled — so clients who didn't buy it get no reminder calls. Also honor the reminder timing (value/unit) instead of the hardcoded 1-hr window | `reminders.ts`, `accounts`/services state |
 
 ---
 

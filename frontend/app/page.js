@@ -437,6 +437,13 @@ export default function Home() {
   const [qualifiedCriteria, setQualifiedCriteria] = useState("");
   const [recruitmentEnabled, setRecruitmentEnabled] = useState(false); // only meaningful in Qualify mode → reveals booking
 
+  // Appointment Reminders states
+  const [remindSourceBooked, setRemindSourceBooked] = useState(false);
+  const [remindSourceCalendar, setRemindSourceCalendar] = useState(false);
+  const [remindSourceUpload, setRemindSourceUpload] = useState(false);
+  const [reminderTimingValue, setReminderTimingValue] = useState("1");
+  const [reminderTimingUnit, setReminderTimingUnit] = useState("hours");
+
   // Section 4: Offer & Knowledge
   const [clientOffer, setClientOffer] = useState("");
   const [knowledgeBase, setKnowledgeBase] = useState("");
@@ -824,8 +831,8 @@ Always handle objections politely.`;
   };
 
   const handleActivateService = () => {
-    // Lead Qualification (capture-only) needs no meeting; it does once recruitment screening is on.
-    const needsMeeting = !(configuringService === "Lead Qualification" && !recruitmentEnabled);
+    // Lead Qualification (capture-only) and Appointment Reminders need no meeting; otherwise required.
+    const needsMeeting = !(configuringService === "Lead Qualification" && !recruitmentEnabled) && configuringService !== "Appointment Reminders";
     if (needsMeeting && !meetingMode) return; // required check
     const c = onboardedClient;
     if (!c) return;
@@ -840,6 +847,7 @@ Always handle objections politely.`;
       clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
       meetingLength, meetingBuffer, bookingCapacity,
       qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
+      remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
       phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
@@ -871,6 +879,7 @@ Always handle objections politely.`;
       clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
       meetingLength, meetingBuffer, bookingCapacity,
       qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
+      remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
       phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
       callingHoursStart, callingHoursEnd, callingTimezone,
       maxCallAttempts, retryGapDays, dailyCapPerNumber,
@@ -897,10 +906,18 @@ Always handle objections politely.`;
     setConfiguringService(serviceId);
     // Lead-qual fields reset clean on every open; saved/defaults override below.
     setQualifyingQuestions([""]); setQualifiedCriteria(""); setRecruitmentEnabled(false);
-    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals" || serviceId === "Lead Qualification") {
+    
+    // Appointment Reminders fields reset clean:
+    setRemindSourceBooked(false);
+    setRemindSourceCalendar(false);
+    setRemindSourceUpload(false);
+    setReminderTimingValue("1");
+    setReminderTimingUnit("hours");
+
+    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals" || serviceId === "Lead Qualification" || serviceId === "Appointment Reminders") {
       const saved = onboardedClient?.serviceConfigs?.[serviceId];
       if (saved) {
-        setScriptVariant(saved.scriptVariant || (serviceId === "Reactivation & Renewals" ? "db_reactivation" : "default"));
+        setScriptVariant(saved.scriptVariant || (serviceId === "Reactivation & Renewals" ? "db_reactivation" : serviceId === "Appointment Reminders" ? "confirmation" : "default"));
         setScriptText(saved.scriptText || "");
         setOpeningLine(saved.openingLine || "");
         setSuccessMetric(saved.successMetric || "");
@@ -938,6 +955,11 @@ Always handle objections politely.`;
         setQualifyingQuestions(saved.qualifyingQuestions?.length ? saved.qualifyingQuestions : [""]);
         setQualifiedCriteria(saved.qualifiedCriteria || "");
         setRecruitmentEnabled(saved.recruitmentEnabled || false);
+        setRemindSourceBooked(saved.remindSourceBooked || false);
+        setRemindSourceCalendar(saved.remindSourceCalendar || false);
+        setRemindSourceUpload(saved.remindSourceUpload !== undefined ? saved.remindSourceUpload : false);
+        setReminderTimingValue(saved.reminderTimingValue || "1");
+        setReminderTimingUnit(saved.reminderTimingUnit || "hours");
       } else if (serviceId === "Lead Qualification") {
         // No saved config yet — qualification defaults (capture-only). Questions/criteria start empty.
         setScriptVariant("default");
@@ -963,6 +985,36 @@ Always handle objections politely.`;
         setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
         setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
         setMaxCallLength("5"); setMaxLeadsPerRun("100");
+      } else if (serviceId === "Appointment Reminders") {
+        // No saved config yet — Appointment Reminders defaults.
+        setScriptVariant("confirmation");
+        setScriptText("You are calling to remind someone about an upcoming appointment for the business described in your context. Be friendly and clear. Confirm the date, time, and location. Ask if they can make it. If they need to reschedule, call check_availability and then book_appointment with the new time. If they can't make it, capture the reason with capture_fields. Always end with a clear next step.");
+        setOpeningLine("Hi, this is a reminder from the team about your upcoming appointment — can you confirm you'll be there?");
+        setSuccessMetric("Appointment confirmed, rescheduled, or cancellation reason captured.");
+        setVoiceSelection("default");
+        setModelSelection("gpt-4o-mini");
+        setIcpDescription("");
+        setIsUploadListChecked(true);
+        setIsScrapeChecked(false);
+        setScrapeCity(""); setScrapeState(""); setScrapeRadius("10"); setScrapeBusinessType("");
+        setClientOffer("");
+        setKnowledgeBase("");
+        setAttachedDocuments([]);
+        setMeetingMode(""); setMeetingLink(""); setMeetingAddress("");
+        setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
+        setMeetingLength("30"); setMeetingBuffer("15"); setBookingCapacity("20");
+        setPhoneNumbers([{ number: "", cap: 40 }]);
+        setCallingHoursStart("09:00"); setCallingHoursEnd("18:00");
+        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+        setMaxCallAttempts("3"); setRetryGapDays("3"); setDailyCapPerNumber("40");
+        setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
+        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxCallLength("5"); setMaxLeadsPerRun("100");
+        setRemindSourceBooked(false);
+        setRemindSourceCalendar(false);
+        setRemindSourceUpload(true);
+        setReminderTimingValue("1");
+        setReminderTimingUnit("hours");
       } else if (onboardedClient?.id === "acc_Harbor") {
         if (serviceId === "Outbound Sales / Appt Setting") {
           setScriptVariant("appointment_setting");
@@ -4132,179 +4184,347 @@ Always handle objections politely.`;
             )}
 
             {configuringService ? (
-              (configuringService === "Outbound Sales / Appt Setting" || configuringService === "Reactivation & Renewals" || configuringService === "Lead Qualification") ? (
-                /* Configuration Form — shared by Outbound Sales, Reactivation, and Lead Qualification */
+              (configuringService === "Outbound Sales / Appt Setting" || configuringService === "Reactivation & Renewals" || configuringService === "Lead Qualification" || configuringService === "Appointment Reminders") ? (
+                /* Configuration Form — shared by Outbound Sales, Reactivation, Lead Qualification, and Appointment Reminders */
                 <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
                   
-                  {/* Section 3: Who it calls */}
-                  {(() => {
-                    const isConfigured = icpDescription.trim() !== "" && (isUploadListChecked || (isScrapeChecked && scrapeCity.trim() !== "" && scrapeState.trim() !== "" && scrapeBusinessType.trim() !== ""));
-                    return (
-                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Who it calls (Leads &amp; Target ICP)</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set targeting parameters for Lead Scraper or upload a custom CSV contact list.</span>
+                  {/* Section 3: Who it calls / Appointment Source & Timing */}
+                  {configuringService === "Appointment Reminders" ? (
+                    (() => {
+                      const hasBookingService = onboardedClient?.activeServices?.includes("Outbound Sales / Appt Setting") || onboardedClient?.activeServices?.includes("Reactivation & Renewals");
+                      const isConfigured = (remindSourceBooked || remindSourceCalendar || remindSourceUpload) && reminderTimingValue.trim() !== "";
+                      return (
+                        <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Appointment Source &amp; Reminder Timing</span>
+                              <span style={{ fontSize: "11px", color: "#8A90A0" }}>Choose where we fetch appointments and configure when the agent should call.</span>
+                            </div>
+                            {isConfigured ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                                Configured ✓
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                                Needs input
+                              </span>
+                            )}
                           </div>
-                          {isConfigured ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                              Configured ✓
-                            </span>
-                          ) : (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
-                              Needs input
-                            </span>
-                          )}
-                        </div>
 
-                        {/* ICP Description Textarea */}
-                        {(() => {
-                          const isBusiness = onboardedClient?.targetCustomerType === "business";
-                          return (
-                            <>
-                              <div>
-                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>
-                                  {isBusiness ? "Ideal Customer Profile (ICP) Description" : "Target Audience / Demographic Description"}
-                                </label>
-                                <textarea
-                                  placeholder={isBusiness ? "e.g. Dental clinics, roofers, HVAC companies in Austin, TX..." : "e.g. Past retail customers, homeowners who requested a roofing quote..."}
-                                  value={icpDescription}
-                                  onChange={(e) => setIcpDescription(e.target.value)}
-                                  style={{
-                                    width: "100%",
-                                    minHeight: "70px",
-                                    padding: "10px 12px",
-                                    border: "1px solid #ECEEF2",
-                                    borderRadius: "8px",
-                                    fontSize: "13px",
-                                    color: "#1F2433",
-                                    fontFamily: "inherit",
-                                    resize: "vertical",
-                                    outline: "none"
-                                  }}
+                          {/* Reminder Type choice */}
+                          <div>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Reminder Type</label>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              {[
+                                {
+                                  value: "confirmation",
+                                  label: "Confirmation",
+                                  desc: "Confirm upcoming meetings",
+                                  template: "You are calling to remind someone about an upcoming appointment for the business described in your context. Be friendly and clear. Confirm the date, time, and location. Ask if they can make it. If they need to reschedule, call check_availability and then book_appointment with the new time. If they can't make it, capture the reason with capture_fields. Always end with a clear next step."
+                                },
+                                {
+                                  value: "no_show_recovery",
+                                  label: "No-Show Recovery",
+                                  desc: "Rebook missed appointments",
+                                  template: "You are calling someone who missed a recent appointment with the business described in your context. Be warm and non-judgmental — things come up. Confirm you've reached the right person, let them know they were missed, and offer to find a new time. Call check_availability and book_appointment to rebook. If they no longer want to come, capture the reason with capture_fields."
+                                },
+                                {
+                                  value: "event_reminder",
+                                  label: "Event Reminder",
+                                  desc: "Remind event registrants",
+                                  template: "You are calling people registered for an upcoming event run by the business described in your context. Remind them of the event date, time, and location, and confirm whether they still plan to attend. Record their answer with capture_fields. If they can't make it, thank them and note it. Keep it brief and upbeat."
+                                }
+                              ].map((opt) => {
+                                const isSelected = scriptVariant === opt.value;
+                                return (
+                                  <div
+                                    key={opt.value}
+                                    onClick={() => {
+                                      setScriptVariant(opt.value);
+                                      setScriptText(opt.template);
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      padding: "10px 12px",
+                                      borderRadius: "8px",
+                                      cursor: "pointer",
+                                      border: isSelected ? "2px solid #4F46FF" : "1px solid #ECEEF2",
+                                      background: isSelected ? "#F4F5FF" : "#FFFFFF",
+                                      transition: "all 150ms ease"
+                                    }}
+                                  >
+                                    <div style={{ fontSize: "12px", fontWeight: 700, color: isSelected ? "#4F46FF" : "#1F2433" }}>{opt.label}</div>
+                                    <div style={{ fontSize: "10px", color: "#8A90A0", marginTop: "2px" }}>{opt.desc}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Appointment Sources Checkboxes */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Appointment Source (Select all that apply)</label>
+                            
+                            {/* Checkbox 1 */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasBookingService ? "#1F2433" : "#A0A6B4", cursor: hasBookingService ? "pointer" : "not-allowed" }}>
+                                <input
+                                  type="checkbox"
+                                  disabled={!hasBookingService}
+                                  checked={remindSourceBooked && hasBookingService}
+                                  onChange={(e) => setRemindSourceBooked(e.target.checked)}
+                                  style={{ accentColor: "#4F46FF", cursor: hasBookingService ? "pointer" : "not-allowed" }}
                                 />
-                                <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>
-                                  {isBusiness 
-                                    ? "Search terms and scraping keywords will auto-generate from this text description." 
-                                    : "This helps the AI agent understand who it is calling and tailor its conversation style."
-                                  }
-                                </p>
-                              </div>
+                                <span>Remind the meetings we book (auto)</span>
+                              </label>
+                              {!hasBookingService && (
+                                <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
+                                  Create an Outbound service first to auto-remind the meetings it books.
+                                </span>
+                              )}
+                            </div>
 
-                              {/* Checkboxes for Lead Source */}
-                              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source</label>
-                                
-                                {isBusiness ? (
+                            {/* Checkbox 2 */}
+                            <div>
+                              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={remindSourceCalendar}
+                                  onChange={(e) => setRemindSourceCalendar(e.target.checked)}
+                                  style={{ accentColor: "#4F46FF", cursor: "pointer" }}
+                                />
+                                <span>Connect a calendar (Google Calendar / Outlook Sync)</span>
+                              </label>
+                              <span style={{ fontSize: "11px", color: "#8A90A0", marginLeft: "22px", display: "block" }}>
+                                Mock connection only. In production, this hooks into the client&apos;s live calendar feed.
+                              </span>
+                            </div>
+
+                            {/* Checkbox 3 */}
+                            <div>
+                              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={remindSourceUpload}
+                                  onChange={(e) => setRemindSourceUpload(e.target.checked)}
+                                  style={{ accentColor: "#4F46FF", cursor: "pointer" }}
+                                />
+                                <span>Upload an appointment list (CSV: name, phone, appointment time)</span>
+                              </label>
+                              <span style={{ fontSize: "11px", color: "#8A90A0", marginLeft: "22px", display: "block" }}>
+                                Provide scheduled appointments manually using the document zone below.
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Reminder Timing */}
+                          <div style={{ borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Reminder Timing</label>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <input
+                                type="number"
+                                min="1"
+                                value={reminderTimingValue}
+                                onChange={(e) => setReminderTimingValue(e.target.value)}
+                                style={{ width: "80px", padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                              />
+                              <select
+                                value={reminderTimingUnit}
+                                onChange={(e) => setReminderTimingUnit(e.target.value)}
+                                style={{ padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none", background: "#FFFFFF", cursor: "pointer" }}
+                              >
+                                {scriptVariant === "no_show_recovery" ? (
                                   <>
-                                    {/* Checkbox 1: Upload a list */}
-                                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}>
-                                      <input
-                                        type="checkbox"
-                                        disabled={configuringService === "Reactivation & Renewals"}
-                                        checked={isUploadListChecked || configuringService === "Reactivation & Renewals"}
-                                        onChange={(e) => setIsUploadListChecked(e.target.checked)}
-                                        style={{ accentColor: "#4F46FF", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}
-                                      />
-                                      <span>Upload a list (CSV file)</span>
-                                    </label>
-
-                                    {/* Checkbox 2: Scrape / find leads */}
-                                    {configuringService !== "Reactivation & Renewals" && (() => {
-                                      // Only an actually-created, active Lead Generation service unlocks scraping — not a mock display tag.
-                                      const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation");
-                                      return (
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasLeadGen ? "#1F2433" : "#A0A6B4", cursor: hasLeadGen ? "pointer" : "not-allowed" }}>
-                                            <input
-                                              type="checkbox"
-                                              disabled={!hasLeadGen}
-                                              checked={isScrapeChecked && hasLeadGen}
-                                              onChange={(e) => setIsScrapeChecked(e.target.checked)}
-                                              style={{ accentColor: "#4F46FF", cursor: hasLeadGen ? "pointer" : "not-allowed" }}
-                                            />
-                                            <span>Scrape / find leads</span>
-                                          </label>
-                                          {!hasLeadGen && (
-                                            <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
-                                              You need to create a Lead Generation service for this client first to start scraping.
-                                            </span>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
+                                    <option value="minutes">minutes</option>
+                                    <option value="hours">hours</option>
                                   </>
                                 ) : (
-                                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433" }}>
-                                    <input
-                                      type="checkbox"
-                                      checked
-                                      disabled
-                                      style={{ accentColor: "#4F46FF", cursor: "not-allowed" }}
-                                    />
-                                    <span style={{ color: "#5A6072" }}>Upload a list (Consumer B2C calls require uploading a custom contact list)</span>
-                                  </label>
+                                  <>
+                                    <option value="hours">hours</option>
+                                    <option value="days">days</option>
+                                  </>
                                 )}
-                              </div>
-                            </>
-                          );
-                        })()}
-
-                        {isScrapeChecked && (onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation")) && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
-                            <div>
-                              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1F2433", display: "block" }}>Where to search for leads</span>
-                              <span style={{ fontSize: "11px", color: "#8A90A0", display: "block", marginTop: "2px" }}>We search this area for matching businesses, e.g. within 25 km of Austin, TX.</span>
-                            </div>
-                            
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                              <div>
-                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>City</label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Austin"
-                                  value={scrapeCity}
-                                  onChange={(e) => setScrapeCity(e.target.value)}
-                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>State</label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. TX"
-                                  value={scrapeState}
-                                  onChange={(e) => setScrapeState(e.target.value)}
-                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Radius (km)</label>
-                                <input
-                                  type="number"
-                                  placeholder="e.g. 25"
-                                  value={scrapeRadius}
-                                  onChange={(e) => setScrapeRadius(e.target.value)}
-                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                />
-                              </div>
-                              <div>
-                                <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Business Type</label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Dental Clinic"
-                                  value={scrapeBusinessType}
-                                  onChange={(e) => setScrapeBusinessType(e.target.value)}
-                                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                />
-                              </div>
+                              </select>
+                              <span style={{ fontSize: "12.5px", fontWeight: 500, color: "#1F2433", marginLeft: "4px" }}>
+                                {scriptVariant === "confirmation" && `before the appointment.`}
+                                {scriptVariant === "no_show_recovery" && `after a missed appointment.`}
+                                {scriptVariant === "event_reminder" && `before the event.`}
+                              </span>
                             </div>
                           </div>
-                        )}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    (() => {
+                      const isConfigured = icpDescription.trim() !== "" && (isUploadListChecked || (isScrapeChecked && scrapeCity.trim() !== "" && scrapeState.trim() !== "" && scrapeBusinessType.trim() !== ""));
+                      return (
+                        <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Who it calls (Leads &amp; Target ICP)</span>
+                              <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set targeting parameters for Lead Scraper or upload a custom CSV contact list.</span>
+                            </div>
+                            {isConfigured ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
+                                Configured ✓
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
+                                Needs input
+                              </span>
+                            )}
+                          </div>
 
-                      </div>
-                    );
-                  })()}
+                          {/* ICP Description Textarea */}
+                          {(() => {
+                            const isBusiness = onboardedClient?.targetCustomerType === "business";
+                            return (
+                              <>
+                                <div>
+                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>
+                                    {isBusiness ? "Ideal Customer Profile (ICP) Description" : "Target Audience / Demographic Description"}
+                                  </label>
+                                  <textarea
+                                    placeholder={isBusiness ? "e.g. Dental clinics, roofers, HVAC companies in Austin, TX..." : "e.g. Past retail customers, homeowners who requested a roofing quote..."}
+                                    value={icpDescription}
+                                    onChange={(e) => setIcpDescription(e.target.value)}
+                                    style={{
+                                      width: "100%",
+                                      minHeight: "70px",
+                                      padding: "10px 12px",
+                                      border: "1px solid #ECEEF2",
+                                      borderRadius: "8px",
+                                      fontSize: "13px",
+                                      color: "#1F2433",
+                                      fontFamily: "inherit",
+                                      resize: "vertical",
+                                      outline: "none"
+                                    }}
+                                  />
+                                  <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>
+                                    {isBusiness 
+                                      ? "Search terms and scraping keywords will auto-generate from this text description." 
+                                      : "This helps the AI agent understand who it is calling and tailor its conversation style."
+                                    }
+                                  </p>
+                                </div>
+
+                                {/* Checkboxes for Lead Source */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source</label>
+                                  
+                                  {isBusiness ? (
+                                    <>
+                                      {/* Checkbox 1: Upload a list */}
+                                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}>
+                                        <input
+                                          type="checkbox"
+                                          disabled={configuringService === "Reactivation & Renewals"}
+                                          checked={isUploadListChecked || configuringService === "Reactivation & Renewals"}
+                                          onChange={(e) => setIsUploadListChecked(e.target.checked)}
+                                          style={{ accentColor: "#4F46FF", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}
+                                        />
+                                        <span>Upload a list (CSV file)</span>
+                                      </label>
+
+                                      {/* Checkbox 2: Scrape / find leads */}
+                                      {configuringService !== "Reactivation & Renewals" && (() => {
+                                        // Only an actually-created, active Lead Generation service unlocks scraping — not a mock display tag.
+                                        const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation");
+                                        return (
+                                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasLeadGen ? "#1F2433" : "#A0A6B4", cursor: hasLeadGen ? "pointer" : "not-allowed" }}>
+                                              <input
+                                                type="checkbox"
+                                                disabled={!hasLeadGen}
+                                                checked={isScrapeChecked && hasLeadGen}
+                                                onChange={(e) => setIsScrapeChecked(e.target.checked)}
+                                                style={{ accentColor: "#4F46FF", cursor: hasLeadGen ? "pointer" : "not-allowed" }}
+                                              />
+                                              <span>Scrape / find leads</span>
+                                            </label>
+                                            {!hasLeadGen && (
+                                              <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
+                                                You need to create a Lead Generation service for this client first to start scraping.
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+                                    </>
+                                  ) : (
+                                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433" }}>
+                                      <input
+                                        type="checkbox"
+                                        checked
+                                        disabled
+                                        style={{ accentColor: "#4F46FF", cursor: "not-allowed" }}
+                                      />
+                                      <span style={{ color: "#5A6072" }}>Upload a list (Consumer B2C calls require uploading a custom contact list)</span>
+                                    </label>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
+
+                          {isScrapeChecked && (onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation")) && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
+                              <div>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#1F2433", display: "block" }}>Where to search for leads</span>
+                                <span style={{ fontSize: "11px", color: "#8A90A0", display: "block", marginTop: "2px" }}>We search this area for matching businesses, e.g. within 25 km of Austin, TX.</span>
+                              </div>
+                              
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                                <div>
+                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>City</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Austin"
+                                    value={scrapeCity}
+                                    onChange={(e) => setScrapeCity(e.target.value)}
+                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>State</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. TX"
+                                    value={scrapeState}
+                                    onChange={(e) => setScrapeState(e.target.value)}
+                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Radius (km)</label>
+                                  <input
+                                    type="number"
+                                    placeholder="e.g. 25"
+                                    value={scrapeRadius}
+                                    onChange={(e) => setScrapeRadius(e.target.value)}
+                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Business Type</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Dental Clinic"
+                                    value={scrapeBusinessType}
+                                    onChange={(e) => setScrapeBusinessType(e.target.value)}
+                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        </div>
+                      );
+                    })()
+                  )}
 
                   {/* Section: Qualifying Questions (Lead Qualification only) */}
                   {configuringService === "Lead Qualification" && (() => {
@@ -4397,14 +4617,20 @@ Always handle objections politely.`;
 
                   {/* Section 4: Offer & Knowledge */}
                   {(() => {
-                    const isLeadQual = configuringService === "Lead Qualification";
-                    const isConfigured = (isLeadQual || clientOffer.trim() !== "") && knowledgeBase.trim() !== "";
+                    const isNoOffer = configuringService === "Lead Qualification" || configuringService === "Appointment Reminders";
+                    const isConfigured = (isNoOffer || clientOffer.trim() !== "") && knowledgeBase.trim() !== "";
+                    const sectionTitle = isNoOffer 
+                      ? (configuringService === "Lead Qualification" ? "3. Knowledge Base" : "2. Knowledge Base")
+                      : "2. Offer & Knowledge Base";
+                    const sectionSubtitle = isNoOffer
+                      ? "Core info the agent uses to answer questions on the call."
+                      : "Detail the pitch proposal and core FAQ content that the agent will discuss.";
                     return (
                       <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
                           <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{isLeadQual ? "3. Knowledge Base" : "2. Offer & Knowledge Base"}</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>{isLeadQual ? "Core info the agent uses to answer questions on the call." : "Detail the pitch proposal and core FAQ content that the agent will discuss."}</span>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{sectionTitle}</span>
+                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>{sectionSubtitle}</span>
                           </div>
                           {isConfigured ? (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
@@ -4417,7 +4643,7 @@ Always handle objections politely.`;
                           )}
                         </div>
 
-                        {!isLeadQual && (
+                        {!isNoOffer && (
                         <div>
                           <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>The Core Offer / Pitch Hook</label>
                           <input
@@ -4890,8 +5116,8 @@ Always handle objections politely.`;
                           </span>
                         </div>
 
-                        {/* Dropdown for Script Variant — hidden for Lead Qualification (chosen in the Questions section) */}
-                        <div ref={variantRef} style={{ position: "relative", display: configuringService === "Lead Qualification" ? "none" : "block" }}>
+                        {/* Dropdown for Script Variant — hidden for Lead Qualification and Appointment Reminders (chosen in respective sections) */}
+                        <div ref={variantRef} style={{ position: "relative", display: (configuringService === "Lead Qualification" || configuringService === "Appointment Reminders") ? "none" : "block" }}>
                           <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Script Variant (Preset Selection)</label>
                           <div
                             onClick={() => setIsVariantDropdownOpen(!isVariantDropdownOpen)}
@@ -5296,100 +5522,104 @@ Always handle objections politely.`;
                   </div>
 
                   {/* Surfaced Auto-Config Section 4: Enrichment */}
-                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isEnrichmentCollapsed ? "0" : "14px" }}>
-                    <div
-                      onClick={() => setIsEnrichmentCollapsed(!isEnrichmentCollapsed)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isEnrichmentCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Lead Enrichment Settings</span>
+                  {configuringService !== "Appointment Reminders" && (
+                    <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isEnrichmentCollapsed ? "0" : "14px" }}>
+                      <div
+                        onClick={() => setIsEnrichmentCollapsed(!isEnrichmentCollapsed)}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isEnrichmentCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Lead Enrichment Settings</span>
+                        </div>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                          Configured ✓
+                        </span>
                       </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                        Configured ✓
-                      </span>
-                    </div>
-                    {!isEnrichmentCollapsed && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                        {onboardedClient?.targetCustomerType !== "business" ? (
-                          <span style={{ fontSize: "12px", color: "#D97706" }}>Enrichment is only for B2B clients — this client sells to consumers, so leads aren&apos;t researched or enriched.</span>
-                        ) : (<>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
-                          <input type="checkbox" checked={enrichEnabled} onChange={(e) => setEnrichEnabled(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
-                          Enrich each lead before dialing
-                        </label>
-                        {enrichEnabled && (
-                          <div ref={depthRef} style={{ position: "relative" }}>
-                            <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Enrichment Depth</label>
-                            <div
-                              onClick={() => setIsDepthDropdownOpen(!isDepthDropdownOpen)}
-                              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: isDepthDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "6px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
-                            >
-                              <span>{enrichmentDepth}</span>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isDepthDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
-                                <path d="m6 9 6 6 6-6" />
-                              </svg>
-                            </div>
-                            {isDepthDropdownOpen && (
-                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                                {["Basic (name + phone)", "Standard Profile + Website", "Deep (profile + website + email + ICP fit)"].map((opt) => (
-                                  <div
-                                    key={opt}
-                                    onClick={() => { setEnrichmentDepth(opt); setIsDepthDropdownOpen(false); }}
-                                    style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: enrichmentDepth === opt ? "#4F46FF" : "#5A6072", background: enrichmentDepth === opt ? "#F4F5FF" : "transparent", fontWeight: enrichmentDepth === opt ? 600 : 500 }}
-                                    onMouseEnter={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "#F7F8FA"; }}
-                                    onMouseLeave={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "transparent"; }}
-                                  >
-                                    {opt}
-                                  </div>
-                                ))}
+                      {!isEnrichmentCollapsed && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                          {onboardedClient?.targetCustomerType !== "business" ? (
+                            <span style={{ fontSize: "12px", color: "#D97706" }}>Enrichment is only for B2B clients — this client sells to consumers, so leads aren&apos;t researched or enriched.</span>
+                          ) : (<>
+                          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
+                            <input type="checkbox" checked={enrichEnabled} onChange={(e) => setEnrichEnabled(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
+                            Enrich each lead before dialing
+                          </label>
+                          {enrichEnabled && (
+                            <div ref={depthRef} style={{ position: "relative" }}>
+                              <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Enrichment Depth</label>
+                              <div
+                                onClick={() => setIsDepthDropdownOpen(!isDepthDropdownOpen)}
+                                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: isDepthDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "6px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
+                              >
+                                <span>{enrichmentDepth}</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isDepthDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
+                                  <path d="m6 9 6 6 6-6" />
+                                </svg>
                               </div>
-                            )}
-                          </div>
-                        )}
-                        </>)}
-                      </div>
-                    )}
-                  </div>
+                              {isDepthDropdownOpen && (
+                                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
+                                  {["Basic (name + phone)", "Standard Profile + Website", "Deep (profile + website + email + ICP fit)"].map((opt) => (
+                                    <div
+                                      key={opt}
+                                      onClick={() => { setEnrichmentDepth(opt); setIsDepthDropdownOpen(false); }}
+                                      style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: enrichmentDepth === opt ? "#4F46FF" : "#5A6072", background: enrichmentDepth === opt ? "#F4F5FF" : "transparent", fontWeight: enrichmentDepth === opt ? 600 : 500 }}
+                                      onMouseEnter={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "#F7F8FA"; }}
+                                      onMouseLeave={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "transparent"; }}
+                                    >
+                                      {opt}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          </>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Surfaced Auto-Config Section 5: Scrape Sources */}
-                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isScrapeSourcesCollapsed ? "0" : "14px" }}>
-                    <div
-                      onClick={() => setIsScrapeSourcesCollapsed(!isScrapeSourcesCollapsed)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isScrapeSourcesCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Scraper Sources</span>
-                      </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                        Configured ✓
-                      </span>
-                    </div>
-                    {!isScrapeSourcesCollapsed && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                        <label style={{ fontWeight: 600, color: "#5A6072", display: "block" }}>Scraping search engines enabled <span style={{ color: "#8A90A0", fontWeight: 500 }}>(click to toggle)</span></label>
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          {["Google Maps", "Yellow Pages", "Hotfrog"].map((s) => {
-                            const on = scrapeSources.includes(s);
-                            return (
-                              <span
-                                key={s}
-                                onClick={() => setScrapeSources(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
-                                style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", background: on ? "#F4F5FF" : "#F4F5F7", border: on ? "1px solid #C7CBF5" : "1px solid #ECEEF2", color: on ? "#4F46FF" : "#A0A6B4", fontSize: "11px", fontWeight: 600, cursor: "pointer", userSelect: "none" }}
-                              >
-                                {on ? "✓ " : ""}{s}
-                              </span>
-                            );
-                          })}
+                  {configuringService !== "Appointment Reminders" && (
+                    <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isScrapeSourcesCollapsed ? "0" : "14px" }}>
+                      <div
+                        onClick={() => setIsScrapeSourcesCollapsed(!isScrapeSourcesCollapsed)}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isScrapeSourcesCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Scraper Sources</span>
                         </div>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
+                          Configured ✓
+                        </span>
                       </div>
-                    )}
-                  </div>
+                      {!isScrapeSourcesCollapsed && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
+                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block" }}>Scraping search engines enabled <span style={{ color: "#8A90A0", fontWeight: 500 }}>(click to toggle)</span></label>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            {["Google Maps", "Yellow Pages", "Hotfrog"].map((s) => {
+                              const on = scrapeSources.includes(s);
+                              return (
+                                <span
+                                  key={s}
+                                  onClick={() => setScrapeSources(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
+                                  style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", background: on ? "#F4F5FF" : "#F4F5F7", border: on ? "1px solid #C7CBF5" : "1px solid #ECEEF2", color: on ? "#4F46FF" : "#A0A6B4", fontSize: "11px", fontWeight: 600, cursor: "pointer", userSelect: "none" }}
+                                >
+                                  {on ? "✓ " : ""}{s}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Surfaced Auto-Config Section 6: Call Limits */}
                   <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isCallLimitsCollapsed ? "0" : "14px" }}>
@@ -5444,8 +5674,8 @@ Always handle objections politely.`;
                       Cancel
                     </button>
                     {(() => {
-                      // Lead Qualification (capture-only) doesn't need a meeting; it does once recruitment is on.
-                      const canActivate = (configuringService === "Lead Qualification" && !recruitmentEnabled) || !!meetingMode;
+                      // Lead Qualification (capture-only) and Appointment Reminders don't need a meeting.
+                      const canActivate = (configuringService === "Lead Qualification" && !recruitmentEnabled) || configuringService === "Appointment Reminders" || !!meetingMode;
                       return (
                     <button
                       type="button"
@@ -5680,6 +5910,35 @@ Always handle objections politely.`;
                                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>Questions</span>
                                   <span style={{ color: "#1F2433" }}>{(config.qualifyingQuestions || []).filter(q => q && q.trim()).length} configured</span>
+                                </div>
+                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
+                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.scriptText}</span>
+                                </div>
+                              </div>
+                            ) : (svcId === "Appointment Reminders" && config) ? (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Reminder Type</span>
+                                  <span style={{ color: "#1F2433", textTransform: "capitalize" }}>
+                                    {String(config.scriptVariant || "").replace(/_/g, " ")}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Reminder Timing</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {config.reminderTimingValue} {config.reminderTimingUnit} {config.scriptVariant === "no_show_recovery" ? "after" : "before"}
+                                  </span>
+                                </div>
+                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Appointment Source(s)</span>
+                                  <span style={{ color: "#1F2433" }}>
+                                    {[
+                                      config.remindSourceBooked && "Remind meetings we book",
+                                      config.remindSourceCalendar && "Connected calendar",
+                                      config.remindSourceUpload && "CSV upload"
+                                    ].filter(Boolean).join(", ") || "None"}
+                                  </span>
                                 </div>
                                 <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
