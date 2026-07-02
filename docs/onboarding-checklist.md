@@ -1,5 +1,8 @@
 # Reacher AI — Client Onboarding Checklist
 
+> **2026-07-02: outbound calling removed entirely (TCPA).** Fields below marked "outbound" no longer
+> apply to any sellable service — see `docs/service-catalog.md` for the current 3-service lineup.
+>
 > **How to onboard a client:** create their `accounts` row, fill the fields below, and flip `status = active`. The engine picks them up automatically. Nothing in the code changes per client — only this database row.
 >
 > Not every field applies to every client — it depends on their **direction** (inbound / outbound / both) and **input pipes**. Each field notes when it's needed.

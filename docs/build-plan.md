@@ -1,8 +1,15 @@
 # Reacher AI — Master Build Plan
 
-> A managed, multi-tenant **AI calling service — inbound and outbound**. Any business signs up; our AI voice agent makes their outbound calls (qualify + book meetings) and/or answers their inbound calls after-hours (converse + book). Fully managed — the client configures once, the system runs.
+> **2026-07-02: outbound calling (and this doc's outbound sections — dial-list prioritization, retry/holiday
+> rollover, the daily Vercel Cron spec) was removed from the product — TCPA risk, no consent basis for
+> scraped/uploaded leads. Kept below as historical build-spec record, not current scope.** See
+> `docs/design-log.md` and `docs/service-catalog.md` for the current, accurate 2-service-plus-add-on
+> lineup. The **Scraping Refill Guard** spec (§4.4) and the **Weekend & Holiday Rollover** logic were both
+> real, correctly-built code — they just no longer have anything to drive them now that dialing is gone.
 >
-> We are **tenant 0**: our own first customer. We use the service to call insurance brokers and sell them the service. Brokers are our **first vertical, not the product.**
+> A managed, multi-tenant **AI calling service — inbound only, plus a consent-gated reminder add-on**. Any business signs up; our AI voice agent answers their inbound calls (converse + book) and, if they've bought the add-on and a caller consents live, calls back once to remind them of a booked meeting. Fully managed — the client configures once, the system runs.
+>
+> We are **tenant 0**: our own first customer.
 
 ---
 

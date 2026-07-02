@@ -1,11 +1,11 @@
 import { supabase } from "./lib/supabase";
 import { normalizePhone } from "./upload";
 import { timezoneFromPhone } from "./enrich";
-import { isWithinCallingWindow } from "./daily";
-import { callContact } from "./call";
 
 // Web-form capture: the client points their form / Typeform / website at /webhook/leads/<token>.
 // Each submission becomes a `new`/`scrubbed` lead for that account — same pipeline as upload/scrape.
+// 2026-07-02: the "speed-to-lead" auto-call that used to fire here on submission was removed — a
+// web-form lead has no TCPA consent basis for an AI-voice call any more than a scraped one does.
 
 const pick = (o: Record<string, any>, keys: string[]): string | null => {
   for (const k of Object.keys(o)) {
@@ -49,7 +49,7 @@ export async function handleWebform(token: string, body: Record<string, any>): P
   if (!token) return { ok: false, reason: "missing token" };
   const { data: acct } = await supabase
     .from("accounts")
-    .select("id, enrichment_enabled, status, calling_hours_start, calling_hours_end")
+    .select("id, enrichment_enabled")
     .eq("webhook_token", token)
     .maybeSingle();
   if (!acct) return { ok: false, reason: "unknown token" };
@@ -75,12 +75,5 @@ export async function handleWebform(token: string, body: Record<string, any>): P
     .from("leads").insert({ ...lead, state }).select("id").single();
   if (error) return { ok: false, reason: error.message };
 
-  if (state === "scrubbed" && acct.status === "active") {
-    const sH = parseInt(String(acct.calling_hours_start ?? "09:00").split(":")[0], 10);
-    const eH = parseInt(String(acct.calling_hours_end ?? "18:00").split(":")[0], 10);
-    if (isWithinCallingWindow(lead.timezone, sH, eH, new Date())) {
-      void callContact(acct.id, inserted.id).catch((e) => console.error("[webform] speed-to-lead call failed:", e?.message ?? e));
-    }
-  }
   return { ok: true, leadId: inserted.id };
 }

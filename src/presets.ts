@@ -30,31 +30,11 @@ const ALL_SOURCES = [
   { key: "hotfrog", enabled: true },
 ];
 
+// 2026-07-02: outbound calling (outbound_sales, lead_qualification, ai_reminders, list_clean) removed
+// entirely — TCPA risk (AI-voice cold-calling non-consented leads). Reminders-after-booking survives,
+// but only as a consent-gated add-on inside inbound_receptionist (see reminders.ts) — not a preset,
+// since it never changes which tools are granted, only whether the reminder sweep may call a booking.
 export const PRESETS: Record<string, Preset> = {
-  outbound_sales: {
-    key: "outbound_sales",
-    label: "Outbound Sales (AI SDR)",
-    description: "Cold-calls prospects, qualifies, and books demos on the calendar.",
-    category: "outbound",
-    enabled_tools: ["check_availability", "book_appointment"],
-    sources_enabled: true,
-    system_prompt:
-      "You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in.",
-    first_message: "Hi, this is the team calling — did I catch you at an okay moment?",
-    success_definition: "A booked, qualified meeting on the calendar.",
-  },
-  lead_qualification: {
-    key: "lead_qualification",
-    label: "Lead Qualification",
-    description: "Calls leads, asks the qualifying questions, scores and records the answers (no booking).",
-    category: "outbound",
-    enabled_tools: ["capture_fields"],
-    sources_enabled: true,
-    system_prompt:
-      "You are calling to qualify prospects for the business described in your context. Ask the qualifying questions naturally, one at a time. Once you've gathered the answers, call capture_fields to save them along with whether the prospect is a good fit (qualified true or false). Be efficient and respectful of their time.",
-    first_message: "Hi, this is the team — do you have a quick minute?",
-    success_definition: "Qualification answers captured for every reachable lead.",
-  },
   inbound_receptionist: {
     key: "inbound_receptionist",
     label: "AI Receptionist (Inbound)",
@@ -101,30 +81,6 @@ export const PRESETS: Record<string, Preset> = {
     first_message: "",
     success_definition: "",
   },
-  ai_reminders: {
-    key: "ai_reminders",
-    label: "Appointment Reminders",
-    description: "Calls upcoming appointments to confirm, recover no-shows, or remind event registrants.",
-    category: "followup",
-    enabled_tools: ["check_availability", "book_appointment", "capture_fields", "opt_out_customer"],
-    sources_enabled: false,
-    system_prompt:
-      "You are calling to remind someone about an upcoming appointment for the business described in your context. Be friendly and clear. Confirm the date, time, and location. Ask if they can make it. If they need to reschedule, call check_availability and then book_appointment with the new time. If they can't make it, capture the reason with capture_fields. Always end with a clear next step.",
-    first_message: "Hi, this is a reminder from the team about your upcoming appointment — can you confirm you'll be there?",
-    success_definition: "Appointment confirmed, rescheduled, or cancellation reason captured.",
-    script_variant: "confirmation",
-  },
-  list_clean: {
-    key: "list_clean",
-    label: "List Cleaning & Validation",
-    description: "Validate phones, dedupe, scrub against opt-outs, add timezone tags — no calling.",
-    category: "data",
-    enabled_tools: [],
-    sources_enabled: true, // uses opt-out check
-    system_prompt: "",
-    first_message: "",
-    success_definition: "Clean, validated, tagged lead list ready for use.",
-  },
   lead_enrich: {
     key: "lead_enrich",
     label: "Lead Enrichment",
@@ -148,50 +104,6 @@ const uniq = (xs: string[]) => [...new Set(xs)];
 export type ScriptVariant = { label: string; prompt?: string };
 
 export const SCRIPT_VARIANTS: Record<string, Record<string, ScriptVariant>> = {
-  outbound_sales: {
-    default: { label: "Cold-call → book demo" },
-    appointment_setting: {
-      label: "Lighter pitch → just fill calendar",
-      prompt:
-        "You are a friendly outbound rep for the business described in your context. Your only goal is to get a meeting on the calendar — keep the pitch light, don't oversell. Confirm you're speaking to the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in.",
-    },
-    db_reactivation: {
-      label: "Re-engage old leads → book",
-      prompt:
-        "You are calling past or dormant leads on behalf of the business described in your context — people who showed interest before but went quiet. Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar. Be gracious if they've moved on.",
-    },
-    renewals_winback: {
-      label: "Expiring contracts → save/renew",
-      prompt:
-        "You are calling customers of the business described in your context whose contract or subscription is expiring or recently lapsed. Your goal is to save the account — confirm their status, surface the value they'd lose, and handle hesitation calmly. If they want to continue, call check_availability and book_appointment to set up the renewal conversation. Never pressure; make staying easy.",
-    },
-  },
-  lead_qualification: {
-    default: { label: "Qualify & score" },
-    survey_research: {
-      label: "Survey script → capture answers",
-      prompt:
-        "You are running a short survey on behalf of the business described in your context. Read the questions naturally, one at a time, without leading the respondent. Record each answer with capture_fields exactly as given. Stay neutral — you're gathering research, not selling. Thank them for their time at the end.",
-    },
-    recruitment_screening: {
-      label: "Screen candidates → book interview",
-      prompt:
-        "You are screening job candidates for the business described in your context. Ask the screening questions one at a time and capture the answers with capture_fields, marking whether the candidate meets the basic criteria (qualified true or false). If they're a fit and interested, call check_availability and book_appointment to schedule an interview. Be respectful and encouraging.",
-    },
-  },
-  ai_reminders: {
-    confirmation: { label: "Confirm upcoming appointments" }, // = preset default prompt
-    no_show_recovery: {
-      label: "Call missed → rebook",
-      prompt:
-        "You are calling someone who missed a recent appointment with the business described in your context. Be warm and non-judgmental — things come up. Confirm you've reached the right person, let them know they were missed, and offer to find a new time. Call check_availability and book_appointment to rebook. If they no longer want to come, capture the reason with capture_fields.",
-    },
-    event_reminder: {
-      label: "Call registrants → confirm attendance",
-      prompt:
-        "You are calling people registered for an upcoming event run by the business described in your context. Remind them of the event date, time, and location, and confirm whether they still plan to attend. Record their answer with capture_fields. If they can't make it, thank them and note it. Keep it brief and upbeat.",
-    },
-  },
   inbound_receptionist: {
     default: { label: "Receptionist (business hours)" },
   },
@@ -201,9 +113,6 @@ export const SCRIPT_VARIANTS: Record<string, Record<string, ScriptVariant>> = {
   },
   complaint_intake: {
     default: { label: "Log complaint with order ID" },
-  },
-  list_clean: {
-    default: { label: "Validate + dedupe + opt-out scrub + timezone tag" },
   },
   lead_enrich: {
     default: { label: "Enrich with website, email, profile, ICP fit" },

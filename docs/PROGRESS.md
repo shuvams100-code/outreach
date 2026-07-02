@@ -1,8 +1,13 @@
 # Reacher AI — Build Progress
 
 > Living status doc. Full design → `build-plan.md` · Operational flow → `flow.html` · **System architecture (agents + frontend inputs) → `architecture.html`** · Sellable use cases → `use-cases.md` · Per-account fields → `onboarding-checklist.md`
+>
+> **2026-07-02: outbound calling removed entirely (TCPA — no consent basis for scraped/uploaded leads).**
+> Everything below describing the outbound engine is historical — see `docs/design-log.md` and
+> `docs/service-catalog.md` for the current product (AI Receptionist + optional consent-gated No-Show
+> Reduction add-on, Support Line, Lead Generation & Enrichment — inbound and data-only only).
 
-**Product:** Multi-tenant AI calling service. Inbound + outbound. Any business signs up; one engine handles everything — no per-client code ever. Each client = one row in `accounts`.
+**Product (historical, pre-2026-07-02):** Multi-tenant AI calling service. Inbound + outbound. Any business signs up; one engine handles everything — no per-client code ever. Each client = one row in `accounts`.
 
 **Tenant-0** = Reacher AI itself (id `00000000-0000-0000-0000-000000000000`), calling insurance brokers to sell the service. This is both our dogfood and the first real test of the system.
 

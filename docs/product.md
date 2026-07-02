@@ -1,5 +1,12 @@
 # Reacher AI — Product Document
 
+> **2026-07-02 correction: Section A (Outbound services) below no longer reflects the product.**
+> Outbound calling was removed entirely — TCPA risk, no consent basis for scraped/uploaded leads. See
+> `docs/design-log.md` and `docs/service-catalog.md` for the current, accurate 3-service lineup
+> (AI Receptionist + optional No-Show Reduction add-on, Support Line, Lead Generation & Enrichment).
+> Section A is left below as pricing-research history, not a sellable list — do not quote it to a
+> client.
+
 > What we actually built, told straight: what it is, how the agents work together, every service we can
 > sell **today** (nothing aspirational — only what the current code does), the pain each one kills, and
 > what to charge for it.

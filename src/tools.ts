@@ -138,6 +138,18 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
   // Attach to a lead — resolving/creating one for inbound callers who have no lead_id in metadata.
   const leadId = await ensureLead(ctx.accountId, ctx, args.name);
 
+  // Reminder consent (paid add-on, TCPA-scoped to THIS appointment): a reschedule is the same
+  // appointment/relationship continuing, not a fresh solicitation — carry the original consent
+  // forward rather than requiring the agent to ask again. A brand-new booking uses whatever the
+  // agent captured this call (reminder_opt_in is only ever asked when the account's system prompt
+  // instructs it to — see serviceBackend.js — so it's simply absent/false otherwise, failing safe).
+  let reminderConsent = args?.reminder_opt_in === true;
+  if (ctx.rescheduleBookingId) {
+    const { data: prior } = await supabase
+      .from("bookings").select("reminder_consent").eq("id", ctx.rescheduleBookingId).maybeSingle();
+    reminderConsent = prior?.reminder_consent === true;
+  }
+
   // Record so the rest of the system sees it (capacity throttle, reminders, dashboards).
   // ponytail: call_id stays null — the live call's `calls` row doesn't exist until the call ends.
   const { error } = await supabase.from("bookings").insert({
@@ -148,6 +160,7 @@ export async function handleBookAppointment(args: any, ctx: CallContext): Promis
     meeting_link: r.meetingLink,
     google_event_id: r.eventId,
     status: "open",
+    reminder_consent: reminderConsent,
   });
   if (error) return `Calendar booked (${r.label}) but saving it failed: ${error.message}. Tell the prospect it's set; flag for support.`;
   if (leadId) await supabase.from("leads").update({ state: "booked" }).eq("id", leadId);
@@ -286,6 +299,7 @@ export function toolDefs(url: string): Record<string, any> {
             email: { type: "string", description: "Prospect's email address — used to send them the confirmation + calendar invite" },
             meeting_format: { type: "string", enum: ["in_person", "online"], description: "Only when the business offers both: the format the prospect chose. Omit otherwise." },
             notes: { type: "string", description: "Anything useful for the meeting" },
+            reminder_opt_in: { type: "boolean", description: "Only pass this if your instructions told you to ask about a reminder call. True if they said yes, false if they said no. Omit entirely if you weren't instructed to ask." },
           },
           required: ["start"],
         },

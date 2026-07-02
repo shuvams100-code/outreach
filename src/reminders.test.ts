@@ -29,4 +29,6 @@ assert.equal(due.length, 0);
 console.log("selectDueReminders: ok");
 
 assert.ok(reminderFirstMessage("Thu, Jul 2, 3:30 PM EDT").includes("Thu, Jul 2, 3:30 PM EDT"));
+// AI-disclosure line must stay in the opener (FCC proposed rule + some states already require it).
+assert.match(reminderFirstMessage("Thu, Jul 2, 3:30 PM EDT"), /automated call/i);
 console.log("reminderFirstMessage: ok");

@@ -8,12 +8,9 @@
     "scrape": "tsx scripts/scrape-tenant0.ts",
     "probe-source": "tsx scripts/probe-source.ts",
     "enrich": "tsx scripts/enrich-tenant0.ts",
-    "scrub": "tsx scripts/scrub-tenant0.ts",
     "upload": "tsx scripts/upload-tenant0.ts",
     "call-test": "tsx scripts/call-test.ts",
     "make-test-assistant": "tsx scripts/create-test-assistant.ts",
-    "call-contact": "tsx scripts/call-contact.ts",
-    "daily": "tsx scripts/daily-tenant0.ts",
     "probe-calendar": "tsx scripts/probe-calendar.ts",
     "probe-booking": "tsx scripts/probe-booking.ts",
     "server": "tsx src/server.ts",
@@ -22,7 +19,7 @@
     "reminders": "tsx scripts/run-reminders.ts",
     "export": "tsx scripts/export-leads.ts",
     "preset": "tsx scripts/apply-preset.ts",
-    "test": "tsx src/scrape.test.ts && tsx src/enrich.test.ts && tsx src/upload.test.ts && tsx src/outcome.test.ts && tsx src/daily.test.ts && tsx src/calendar.test.ts && tsx src/tools.test.ts && tsx src/notify.test.ts && tsx src/reminders.test.ts && tsx src/call.test.ts && tsx src/webform.test.ts && tsx src/export.test.ts && tsx src/presets.test.ts"
+    "test": "tsx src/scrape.test.ts && tsx src/enrich.test.ts && tsx src/upload.test.ts && tsx src/calendar.test.ts && tsx src/tools.test.ts && tsx src/notify.test.ts && tsx src/reminders.test.ts && tsx src/call.test.ts && tsx src/webform.test.ts && tsx src/export.test.ts && tsx src/presets.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",

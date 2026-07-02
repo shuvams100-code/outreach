@@ -1,7 +1,7 @@
 // List or apply use-case presets (one or several, composed).
 //   npm run preset                                  → list presets, grouped by category
 //   npm run preset -- <keys> <accountId>            → apply preset(s) to an account
-//     <keys> can be one (outbound_sales) or several comma-separated (inbound_receptionist,outbound_sales)
+//     <keys> can be one (inbound_receptionist) or several comma-separated (inbound_receptionist,complaint_intake)
 // (account id is REQUIRED for apply — so tenant-0's tuned config is never clobbered by accident.)
 import { existsSync } from "node:fs";
 if (existsSync(".env")) process.loadEnvFile(".env");
@@ -12,12 +12,12 @@ const accountId = process.argv[3];
 
 if (!keysArg) {
   console.log("Available presets (pick one or several):\n");
-  for (const cat of ["outbound", "inbound", "data", "custom"]) {
+  for (const cat of ["inbound", "data", "custom"]) {
     console.log(`  [${cat}]`);
     for (const p of listPresets().filter((p) => p.category === cat)) console.log(`    ${p.key} — ${p.label}: ${p.description}`);
   }
-  console.log("\nApply one:       npm run preset -- outbound_sales <accountId>");
-  console.log("Apply several:   npm run preset -- inbound_receptionist,outbound_sales <accountId>");
+  console.log("\nApply one:       npm run preset -- inbound_receptionist <accountId>");
+  console.log("Apply several:   npm run preset -- inbound_receptionist,complaint_intake <accountId>");
   process.exit(0);
 }
 if (!accountId) { console.error("Account id required:  npm run preset -- <keys> <accountId>"); process.exit(1); }

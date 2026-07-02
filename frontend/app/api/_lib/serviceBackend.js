@@ -1,36 +1,52 @@
 import { applyPreset } from "../../../../src/presets";
 
+// 2026-07-02: Outbound Sales / Appt Setting, Reactivation & Renewals, Lead Qualification, Appointment
+// Reminders, and List Cleaning removed entirely — TCPA risk (AI-voice cold-calling non-consented
+// leads). 3 services remain. "No-Show Reduction" (the one calling feature that survived) is NOT a
+// service/preset here — it's a paid add-on checkbox inside AI Receptionist's own config, gated on
+// per-booking consent, not on tool grants. See reassertRemindersAddon below and docs/design-log.md.
+//
 // Ops-facing service name -> engine preset key(s) that grant its tools. The frontend's own edited
 // script (config.scriptText) always wins over the preset's canned prompt (see activateService below) —
 // presets here only decide WHICH TOOLS the agent gets, not what it says.
 export const SERVICE_PRESET_KEYS = {
-  "Outbound Sales / Appt Setting": ["outbound_sales"],
-  "Reactivation & Renewals": ["outbound_sales"],
-  "Lead Qualification": ["lead_qualification"], // + "outbound_sales" when recruitmentEnabled — see activateService
-  "Appointment Reminders": ["ai_reminders"],
   "AI Receptionist": ["inbound_receptionist"],
   "Support / Complaint Line": ["complaint_intake"],
-  // Merged 2026-07-02: service 7 now covers both generation and enrichment (enrichment isn't
-  // gated on generation — it also runs on leads uploaded outside this service). Both preset keys
-  // are data-only (no tools/script), so stacking them just keeps sources_enabled/scraping on.
+  // service 7 covers both generation and enrichment (enrichment isn't gated on generation — it also
+  // runs on leads uploaded outside this service). Both preset keys are data-only (no tools/script),
+  // so stacking them just keeps sources_enabled/scraping on.
   "Lead Generation": ["lead_gen", "lead_enrich"],
-  "List Cleaning": ["list_clean"],
 };
 
-function presetKeysFor(serviceKey, config) {
-  const base = SERVICE_PRESET_KEYS[serviceKey] ?? [];
-  // Recruitment screening needs booking tools on top of capture_fields — stack outbound_sales for them.
-  if (serviceKey === "Lead Qualification" && config?.recruitmentEnabled) return [...base, "outbound_sales"];
-  return base;
+function presetKeysFor(serviceKey) {
+  return SERVICE_PRESET_KEYS[serviceKey] ?? [];
+}
+
+// No-Show Reduction instruction, appended to AI Receptionist's system_prompt when the add-on is on.
+const REMINDER_ADDON_MARKER = "NO-SHOW REDUCTION";
+const REMINDER_ADDON_INSTRUCTION =
+  `\n\n${REMINDER_ADDON_MARKER} (paid add-on, active for this account): once the caller agrees to book a NEW appointment, before calling book_appointment ask them: "Would it be okay if we call to remind you about this an hour before, and if you're not able to make it we'll be happy to help you reschedule?" Pass their answer as reminder_opt_in (true/false) in that same book_appointment call. Don't ask again when rescheduling an existing appointment — that consent already carries over.`;
+
+// applyPreset recomposes system_prompt from scratch on every call (single- or multi-role) and has no
+// idea about account-level add-ons like this one, so it must be reasserted after every activate/
+// deactivate — not just when AI Receptionist itself is the service being touched, since activating or
+// deactivating any OTHER service also rewrites the prompt out from under it.
+async function reassertRemindersAddon(supabase, accountId, activeServices, serviceConfigs) {
+  const on = activeServices.includes("AI Receptionist") && serviceConfigs["AI Receptionist"]?.remindersAddonEnabled === true;
+  if (!on) return;
+  const { data: cur } = await supabase.from("accounts").select("system_prompt").eq("id", accountId).single();
+  if (cur?.system_prompt && !cur.system_prompt.includes(REMINDER_ADDON_MARKER)) {
+    await supabase.from("accounts").update({ system_prompt: cur.system_prompt + REMINDER_ADDON_INSTRUCTION }).eq("id", accountId);
+  }
 }
 
 // Client-specific fields the frontend's config maps to `accounts` columns. Only includes a key when the
 // source field is present on `config` — so activating one service never clobbers another service's
-// columns (e.g. activating Appointment Reminders never touches qualifying_questions, since its config
-// object has no such field). Shared columns (icp/offer/knowledge/booking/phone/hours/retry/enrichment)
-// are genuinely shared across services on one account today — last save wins. That's an honest reflection
-// of the engine's one-assistant-per-account model, not a bug; a per-direction assistant is a bigger,
-// separate change (tracked in docs/mock-and-wiring.md).
+// columns (e.g. activating Lead Generation never touches warm_transfer_number, since its config object
+// has no such field). Shared columns (icp/offer/knowledge/booking/phone/hours/enrichment) are genuinely
+// shared across services on one account today — last save wins. That's an honest reflection of the
+// engine's one-assistant-per-account model, not a bug; a per-direction assistant is a bigger, separate
+// change (tracked in docs/mock-and-wiring.md).
 export function buildClientFields(config, accountTimezone) {
   const f = {};
   const set = (col, val) => { if (val !== undefined) f[col] = val; };
@@ -49,21 +65,14 @@ export function buildClientFields(config, accountTimezone) {
   // live as a column yet; it stays inside service_configs (saved below) for display only.
   if (config.scrapeSources) set("sources", config.scrapeSources.map((key) => ({ key, enabled: true })));
 
-  if (config.qualifyingQuestions !== undefined || config.qualifiedCriteria !== undefined) {
-    set("qualifying_questions", {
-      questions: (config.qualifyingQuestions ?? []).filter((q) => q && q.trim()),
-      qualified_criteria: config.qualifiedCriteria ?? "",
-    });
-  }
-
-  if (config.maxCallAttempts !== undefined || config.retryGapDays !== undefined) {
-    set("retry_rules", { max_attempts: Number(config.maxCallAttempts ?? 3), gap_days: Number(config.retryGapDays ?? 3) });
-  }
-  set("daily_dial_cap", config.dailyCapPerNumber ? Number(config.dailyCapPerNumber) : undefined);
-  set("max_call_duration_seconds", config.maxCallLength ? Number(config.maxCallLength) * 60 : undefined);
   set("lead_cap_per_run", config.maxLeadsPerRun ? Number(config.maxLeadsPerRun) : undefined);
   set("enrichment_enabled", config.enrichEnabled);
   set("enrichment_depth", config.enrichmentDepth);
+
+  // No-Show Reduction — only AI Receptionist's own config object carries this field, so activating
+  // any other service never touches it. Booking-level consent lives on `bookings.reminder_consent`
+  // (captured live per-appointment); this is just the account-level "did they buy the add-on" switch.
+  set("reminders_addon_enabled", config.remindersAddonEnabled);
 
   set("calling_hours_start", config.callingHoursStart);
   set("calling_hours_end", config.callingHoursEnd);
@@ -83,11 +92,6 @@ export function buildClientFields(config, accountTimezone) {
     });
     set("booking_capacity", config.bookingCapacity ? Number(config.bookingCapacity) : undefined);
   }
-
-  // Appointment Reminders — no dedicated column exists for auto-link/timing yet, and stuffing them into
-  // an unrelated column (e.g. retry_rules) would be a misleading name for what they are. They're already
-  // fully preserved in service_configs (below); the reminder sweep reads them from there once it's gated
-  // to paid accounts (tracked TODO in docs/mock-and-wiring.md) rather than from a repurposed column.
 
   // AI Receptionist / Support Line — warm transfer + coverage.
   if (config.warmTransferNumber !== undefined) set("warm_transfer_number", config.warmTransferEnabled ? config.warmTransferNumber : null);
@@ -114,7 +118,7 @@ export async function activateService(supabase, accountId, serviceKey, config) {
 
   // Union the preset keys of every active service so tools/sources reflect everything switched on,
   // not just the one being (re)activated.
-  const allPresetKeys = [...new Set(activeServices.flatMap((k) => presetKeysFor(k, serviceConfigs[k])))];
+  const allPresetKeys = [...new Set(activeServices.flatMap((k) => presetKeysFor(k)))];
 
   // Only override the spoken script when exactly one service is active — with more than one, let
   // buildPresetUpdate's own multi-role composition take over (see presets.ts). Single-assistant-per-
@@ -137,6 +141,8 @@ export async function activateService(supabase, accountId, serviceKey, config) {
     .update({ ...clientFields, service_configs: serviceConfigs, active_services: activeServices, status: "active" })
     .eq("id", accountId);
   if (updErr) throw new Error(`Saving service fields failed: ${updErr.message}`);
+
+  await reassertRemindersAddon(supabase, accountId, activeServices, serviceConfigs);
 
   return { activeServices, presetKeys: allPresetKeys };
 }
@@ -167,7 +173,7 @@ export async function deactivateService(supabase, accountId, serviceKey, mode = 
   const serviceConfigs = { ...(acct.service_configs ?? {}) };
   if (mode === "delete") delete serviceConfigs[serviceKey];
 
-  const allPresetKeys = [...new Set(activeServices.flatMap((k) => presetKeysFor(k, serviceConfigs[k])))];
+  const allPresetKeys = [...new Set(activeServices.flatMap((k) => presetKeysFor(k)))];
   if (allPresetKeys.length) {
     // Exactly one service left active → restore ITS saved script (else the prompt would silently fall
     // back to the preset's generic default text instead of what was actually configured for it).
@@ -182,11 +188,16 @@ export async function deactivateService(supabase, accountId, serviceKey, mode = 
   }
 
   const status = activeServices.length > 0 ? "active" : "onboarding";
+  // AI Receptionist itself going inactive takes the add-on with it — no receptionist, nothing to book
+  // a reminder consent through.
+  const remindersOff = serviceKey === "AI Receptionist" ? { reminders_addon_enabled: false } : {};
   const { error: updErr } = await supabase
     .from("accounts")
-    .update({ service_configs: serviceConfigs, active_services: activeServices, status })
+    .update({ service_configs: serviceConfigs, active_services: activeServices, status, ...remindersOff })
     .eq("id", accountId);
   if (updErr) throw new Error(`Deactivating service failed: ${updErr.message}`);
+
+  await reassertRemindersAddon(supabase, accountId, activeServices, serviceConfigs);
 
   return { activeServices };
 }

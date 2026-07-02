@@ -118,10 +118,16 @@
 <header>
   <span class="brand">◆ Reacher AI</span>
   <h1>System Architecture</h1>
+  <div style="margin:0 0 1.1rem;padding:.9rem 1.1rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:.75rem;font-size:.86rem;color:#9a3412;line-height:1.6;">
+    <b>Updated 2026-07-02:</b> outbound calling (cold-calling scraped or uploaded leads) was removed from
+    the product — an AI voice call to someone who hasn't consented has no legal basis under U.S. phone
+    calling law (the TCPA). This page now shows the real system: <b>inbound-only</b>, plus one narrow,
+    consent-gated reminder feature. Nothing below can call someone who hasn't either called in themselves
+    or said "yes" out loud on a live call.
+  </div>
   <div class="sub">The whole machine, end to end — from <b>point zero</b> (an organization is created), through the
-    <b>preset layer</b>, the crew of specialist agents that run every call, and out to <b>every possible ending</b>.
+    <b>preset layer</b>, the crew of specialist agents that answer every call, and out to <b>every possible ending</b>.
     Every <b>cyan</b> node is a frontend input — exactly what your onboarding screens must collect.</div>
-  <div style="margin-top:.9rem;font-size:.84rem;color:#64748b;">📖 This is the <b>detailed engineering map</b>. For the simpler, high-level "how it works" overview, open <a href="flow.html" style="color:#4f46e5;font-weight:700;text-decoration:none;">flow.html →</a></div>
   <div class="legend">
     <div class="chip"><span class="dot d-input"></span> Frontend input</div>
     <div class="chip"><span class="dot d-preset"></span> Preset layer</div>
@@ -161,210 +167,135 @@
           subgraph ONB ["① ONBOARDING — frontend inputs (cyan = a field your dashboard must collect)"]
             Org(["New organization created"]):::start
             OrgId["Org name · contact · email · client TZ"]:::input
-            Svc{"Pick 1 of 7 services<br/>→ sub-service"}:::preset
-            Preset{"Maps to PRESET(s)<br/>multi-select · stackable"}:::preset
-            PApply["PRESET LAYER composes:<br/>Sales · Qualification · Receptionist<br/>· Complaint · Lead-Gen · Custom<br/>→ unions endings · sources · layers script"]:::preset
-            InScript["Calling script · cyan field:<br/>preset/variant default OR<br/>client's own script (override → VAPI verbatim)"]:::input
+            Svc{"Pick 1 of 3 services<br/>AI Receptionist · Support Line · Lead Gen &amp; Enrichment"}:::preset
+            Preset{"Maps to PRESET(s)<br/>stackable"}:::preset
+            PApply["PRESET LAYER composes:<br/>Receptionist · Complaint · Lead-Gen<br/>→ unions endings · layers script"]:::preset
+            InScript["Calling script · cyan field:<br/>preset default OR<br/>client's own script (override → VAPI verbatim)"]:::input
             InVoice["Voice · dropdown"]:::input
-            InPhone["Phone number(s) · caller-ID + inbound"]:::input
+            InPhone["Inbound phone number(s)"]:::input
             InCal["Calendar + meeting link"]:::input
             InKB["Knowledge base · FAQ answers"]:::input
-            InICP["ICP description · 2-4 lines"]:::input
-            InGeo["Target geo · city / state"]:::input
-            InRules["Dial cap · hours · capacity · retry rules"]:::input
-            InWeb["Web-form capture URL · read-only"]:::input
+            InICP["ICP description + buying-intent signal · Lead Gen only"]:::input
+            InGeo["Target geo · city / state · Lead Gen only"]:::input
+            InAddon["No-Show Reduction add-on · checkbox · Receptionist only"]:::input
             Live(["Flip ACTIVE"]):::start
           end
 
-          subgraph INTAKE ["② INTAKE + DEDUP — a lead enters, or is rejected"]
+          subgraph CALL ["② INBOUND CALL — the caller reaches out. Nothing here ever dials anyone."]
+            Caller(["Caller dials the client's number"]):::start
+            Switchboard["SWITCHBOARD<br/>public front door · resolves which account owns the number"]:::agent
+            ResGate{"account resolved?"}:::dec
+            Refuse["REFUSE · won't book on wrong calendar"]:::bad
+            Voice["THE VOICE<br/>converses · answers from knowledge base"]:::agent
+            Which{"caller wants…"}:::dec
+            CA["TIMEKEEPER check_availability<br/>real calendar · Mon-Fri · hours · buffer"]:::agent
+            BVGate{"slot still open?"}:::dec
+            Alt["offer alternative slots"]:::act
+            Concierge["CONCIERGE book_appointment<br/>books live · asks reminder consent if add-on is on"]:::agent
+            Scribe["SCRIBE capture_fields<br/>complaint · message · callback · answers"]:::agent
+            OptOut["opt_out_customer<br/>never contacted again"]:::act
+          end
+
+          subgraph ENDX ["③ ENDINGS"]
+            Booked["MEETING BOOKED ✓"]:::good
+            Complaint["COMPLAINT / TICKET LOGGED"]:::good
+            Callback["MESSAGE / CALLBACK CAPTURED"]:::good
+            OptedOut["OPTED OUT"]:::good
+          end
+
+          subgraph FUP ["④ NO-SHOW REDUCTION — paid add-on, consent required, one job only"]
+            Consent{"caller said yes,<br/>live, on the call?"}:::dec
+            NoConsent["no reminder call — ever"]:::bad
+            Stamp["reminder_consent = true<br/>on THIS booking only"]:::act
+            Nudge["NUDGE sweep · ~every 15 min<br/>checks: add-on ON + this booking consented"]:::agent
+            DueGate{"meeting in next hour<br/>&amp; not yet reminded?"}:::dec
+            RemCall["reminder call → caller<br/>discloses it's automated · offers reschedule"]:::act
+            Reschedule{"caller reschedules?"}:::dec
+            Carry["new booking inherits<br/>the same consent — no re-ask"]:::act
+          end
+
+          subgraph LEADGEN ["⑤ LEAD GENERATION &amp; ENRICHMENT — data only, no calling, ever"]
+            Manual(["Ops clicks Generate / Enrich"]):::start
             Profiler["PROFILER<br/>ICP → search term · LLM"]:::agent
             Scout["SCOUT<br/>google_maps · yellow_pages · hotfrog"]:::agent
-            AdGate{"isAd /<br/>isAdvertisement?"}:::dec
-            DropAd["drop · sponsored / carrier"]:::bad
-            Porter["PORTER<br/>parse CSV · auto-map headers"]:::agent
-            Catcher["CATCHER<br/>token → map fields"]:::agent
-            Inb(["Inbound call"]):::start
+            AdGate{"isAd?"}:::dec
+            DropAd["drop · sponsored listing"]:::bad
             PhGate{"usable phone?"}:::dec
             DropNo["skip · no phone"]:::bad
-            Norm["normalize → E.164<br/>10-digit→+1 · 11-digit→+ · else reject"]:::act
-            DupGate{"phone OR domain seen?<br/>DB + this run"}:::dec
+            DupGate{"phone OR domain seen?"}:::dec
             DropDup["skip · duplicate"]:::bad
+            NewLead["lead saved · state = new"]:::act
+            Upload(["Client uploads a CSV list"]):::start
+            Porter["PORTER<br/>parses CSV · normalizes phone"]:::agent
+            WebForm(["Someone submits the client's web form"]):::start
+            Catcher["CATCHER<br/>web-form submission → lead"]:::agent
+            Sleuth["SLEUTH · research + intent<br/>website / Tavily → LLM"]:::agent
+            FitGate{"fits ICP?"}:::dec
+            IntentTag["tags buying-intent signal<br/>never disqualifies on its own"]:::act
+            Enriched["ENRICHED · ready to hand over"]:::good
+            DQ["DISQUALIFIED · off-ICP"]:::bad
+            Archivist["ARCHIVIST · export the list"]:::agent
           end
 
-          subgraph PREP ["③ PREP — Guardian gate, then Sleuth's research ladder"]
-            OptGate{"GUARDIAN:<br/>on opt-out / DNC?"}:::dec
-            DQ1["DISQUALIFIED"]:::bad
-            RouteGate{"enrichment ON<br/>+ has website?"}:::dec
-            Sleuth["SLEUTH · research"]:::agent
-            WebGate{"has website?"}:::dec
-            Fetch["fetch site · 8s timeout<br/>regex → email"]:::act
-            LLM1["LLM gpt-oss-120b:free"]:::agent
-            LLM2["fallback 20b:free<br/>429 → 4s backoff"]:::agent
-            ProfGate{"profile<br/>returned?"}:::dec
-            Tavily["TAVILY web search<br/>name + city + state → LLM"]:::act
-            FitGate{"fits account ICP?<br/>icp_description"}:::dec
-            Enriched["ENRICHED<br/>+ business_profile + TZ"]:::good
-            DQ2["DISQUALIFIED · off-ICP"]:::bad
-            StayNew["stays NEW · re-run retries<br/>never fake-enriched"]:::dec
-          end
-
-          subgraph CMD ["④ DISPATCHER — who gets called today"]
-            Cron(["Daily cron"]):::start
-            ActGate{"active &amp;<br/>billing OK?"}:::dec
-            Paused["skip · paused"]:::bad
-            CapGate{"open bookings ≥<br/>booking_capacity?"}:::dec
-            Hold["HOLD · at capacity"]:::bad
-            Reap["reap stranded 'calling' leads<br/>(&gt;1h) → back to scrubbed"]:::act
-            Build["build list · cap 40 / number"]:::act
-            RetrySel["P1 retries-due, oldest first<br/>capped 40% = 16 · overflow→tomorrow"]:::act
-            FreshSel["P2 fresh scrubbed · FIFO · fill 24"]:::act
-            WinGate{"weekday? · not US holiday (observed)?<br/>within hours in lead TZ?"}:::dec
-            Skip["skip lead · not now"]:::act
-          end
-
-          subgraph FIELD ["⑤ THE CALL — Herald, Ghostwriter, the Voice"]
-            Herald["HERALD<br/>place call · stamp account + lead"]:::agent
-            Ghost["GHOSTWRITER<br/>inject knowledge + lead research"]:::agent
-            Switchboard["SWITCHBOARD<br/>inbound front door"]:::agent
-            Voice["THE VOICE<br/>converse · qualify"]:::agent
-          end
-
-          subgraph TOOLS ["⑥ MID-CALL TOOLS — Quartermaster resolves &amp; dispatches"]
-            ResGate{"resolve account:<br/>metadata → number → default?"}:::dec
-            Refuse["REFUSE · won't book on wrong calendar"]:::bad
-            Which{"which tool?"}:::dec
-            CA["TIMEKEEPER check_availability<br/>Mon-Fri · hours · buffer · horizon<br/>skip busy: calendar + open DB bookings"]:::agent
-            BVGate{"slot still open?<br/>re-validate by instant"}:::dec
-            Alt["offer alternative slots"]:::act
-            Concierge["CONCIERGE book_appointment<br/>per-account calendar · event + reminders + link"]:::agent
-            Scribe["SCRIBE capture_fields<br/>answers + qualified + type"]:::agent
-          end
-
-          subgraph OUT ["⑦ ARBITER — classify the finished call"]
-            Arbiter["ARBITER"]:::agent
-            AnsGate{"answered?<br/>no-answer/busy/vm/failed/error → no"}:::dec
-            RetryGate{"retry_count &lt; 3?"}:::dec
-            Sched["next_retry = now + 3 days<br/>retry_count++"]:::act
-            OutGate{"structuredData<br/>.outcome?"}:::dec
-          end
-
-          subgraph ENDX ["⑧ ENDINGS"]
-            Booked["MEETING BOOKED ✓"]:::good
-            Callback["CALLBACK LOGGED"]:::good
-            Complaint["COMPLAINT TICKET"]:::good
-            Qualified["LEAD QUALIFIED"]:::good
-            NotInt["NOT INTERESTED"]:::bad
-            NoAns["NO ANSWER"]:::act
-            Follow["FOLLOW-UP LIST · manual"]:::bad
-          end
-
-          subgraph FUP ["⑨ FOLLOW-THROUGH — Crier, reminders, capacity loop"]
-            Counter["open-bookings counter +1"]:::act
-            Crier["CRIER → Slack alert"]:::agent
-            CalRem["Google Calendar reminds host"]:::act
-            Nudge["NUDGE sweep · ~every 15 min"]:::agent
-            DueGate{"meeting in next hour<br/>&amp; not reminded?"}:::dec
-            RemCall["reminder call → prospect<br/>stamp reminder_1h_sent_at"]:::act
-            PassGate{"meeting passed, still open?<br/>client marks won/lost/no-show?"}:::dec
-            FreeCap["counter −1 · capacity freed"]:::good
-            OpenStill["stays open · forcing function"]:::bad
-          end
-
-          Ready[["READY QUEUE · state = scrubbed"]]:::infra
           Vault[["VAULT — shared memory · every agent reads &amp; writes"]]:::infra
 
           %% ---- full wiring ----
           Org --> OrgId --> Svc --> Preset --> PApply
           PApply --> InScript
-          InScript --> InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb
-          InVoice & InPhone & InCal & InKB & InICP & InGeo & InRules & InWeb --> Live
-          Live --> Profiler & Porter & Catcher
-          InICP -. "drives" .-> Profiler
-          InGeo -. "targets" .-> Scout
-          InWeb -. "endpoint" .-> Catcher
-          Profiler --> Scout --> AdGate
-          AdGate -- yes --> DropAd
-          AdGate -- no --> PhGate
-          Porter --> PhGate
-          Catcher --> PhGate
-          PhGate -- no --> DropNo
-          PhGate -- yes --> Norm --> DupGate
-          DupGate -- yes --> DropDup
-          DupGate -- no --> OptGate
-          OptGate -- yes --> DQ1
-          OptGate -- no --> RouteGate
-          RouteGate -- "no · site-less / enrich off" --> Ready
-          RouteGate -- yes --> Sleuth --> WebGate
-          WebGate -- yes --> Fetch --> LLM1
-          LLM1 -- 429 --> LLM2
-          WebGate -- no --> Tavily
-          LLM1 --> ProfGate
-          LLM2 --> ProfGate
-          ProfGate -- yes --> FitGate
-          ProfGate -- no --> Tavily
-          Tavily --> FitGate
-          FitGate -- yes --> Enriched --> Ready
-          FitGate -- no --> DQ2
-          Sleuth -. "no data" .-> StayNew
-          Cron --> ActGate
-          ActGate -- no --> Paused
-          ActGate -- yes --> CapGate
-          CapGate -- yes --> Hold
-          CapGate -- no --> Reap --> Build
-          Ready -. "supplies" .-> Build
-          Build --> RetrySel & FreshSel
-          RetrySel & FreshSel --> WinGate
-          WinGate -- no --> Skip
-          WinGate -- yes --> Herald --> Ghost --> Voice
-          InKB -. "arms" .-> Ghost
-          InPhone -. "inbound number" .-> Switchboard
-          Inb --> Switchboard --> Voice
-          Voice --> ResGate
-          ResGate -- none --> Refuse
-          ResGate -- resolved --> Which
-          Which -- check_availability --> CA
+          InScript --> InVoice & InPhone & InCal & InKB & InICP & InGeo & InAddon
+          InVoice & InPhone & InCal & InKB & InICP & InGeo & InAddon --> Live
+
+          Live -.-> Caller
+          Caller --> Switchboard --> ResGate
+          ResGate -- no --> Refuse
+          ResGate -- yes --> Voice
+          InKB -. "arms" .-> Voice
+          Voice --> Which
+          Which -- "book a meeting" --> CA
           InCal -. "real slots" .-> CA
           CA --> BVGate
-          Which -- book_appointment --> BVGate
-          BVGate -- no --> Alt
-          Alt -. "retry" .-> CA
+          BVGate -- no --> Alt --> CA
           BVGate -- yes --> Concierge
-          Which -- capture_fields --> Scribe
-          Concierge --> Counter
+          InAddon -. "if on, asks consent" .-> Concierge
           Concierge --> Booked
-          Concierge --> Crier
-          Scribe --> Callback & Complaint & Qualified
-          Voice --> Arbiter --> AnsGate
-          AnsGate -- no --> NoAns --> RetryGate
-          RetryGate -- yes --> Sched
-          Sched -. "due date" .-> Build
-          RetryGate -- no --> Follow
-          AnsGate -- yes --> OutGate
-          OutGate -- booked --> Booked
-          OutGate -- else --> NotInt
-          Booked --> CalRem
-          Counter -. "feeds" .-> CapGate
+          Which -- "leave info / complaint" --> Scribe
+          Scribe --> Complaint & Callback
+          Which -- "stop contacting me" --> OptOut --> OptedOut
+
+          Concierge --> Consent
+          Consent -- no --> NoConsent
+          Consent -- yes --> Stamp --> Nudge
           Nudge --> DueGate
-          DueGate -- yes --> RemCall
-          RemCall -. "confirm / reschedule" .-> Voice
-          Booked --> PassGate
-          PassGate -- yes --> FreeCap
-          FreeCap -. "frees" .-> CapGate
-          PassGate -- no --> OpenStill
-          Sleuth -. "writes" .-> Vault
+          DueGate -- yes --> RemCall --> Reschedule
+          Reschedule -- yes --> Carry -.-> Stamp
+          Reschedule -- no --> Booked
+
+          Manual --> Profiler --> Scout --> AdGate
+          InICP -. "drives" .-> Profiler
+          InGeo -. "targets" .-> Scout
+          AdGate -- yes --> DropAd
+          AdGate -- no --> PhGate
+          PhGate -- no --> DropNo
+          PhGate -- yes --> DupGate
+          DupGate -- yes --> DropDup
+          DupGate -- no --> NewLead
+          Upload --> Porter --> NewLead
+          WebForm --> Catcher --> NewLead
+          NewLead --> Sleuth --> FitGate
+          Sleuth -. "tags" .-> IntentTag
+          FitGate -- yes --> Enriched
+          FitGate -- no --> DQ
+          Enriched --> Archivist
+
           Concierge -. "writes" .-> Vault
           Scribe -. "writes" .-> Vault
-          Arbiter -. "writes" .-> Vault
+          Sleuth -. "writes" .-> Vault
 
           style ONB fill:#ecfeff,stroke:#a5e8f3,color:#0e7490
-          style INTAKE fill:#eff6ff,stroke:#bfdbfe,color:#1e40af
-          style PREP fill:#f6f4ff,stroke:#ddd6fe,color:#5b21b6
-          style CMD fill:#fffbeb,stroke:#fde68a,color:#92400e
-          style FIELD fill:#eef2ff,stroke:#c7d2fe,color:#3730a3
-          style TOOLS fill:#f0fdfa,stroke:#99f6e4,color:#0f766e
-          style OUT fill:#f8fafc,stroke:#e2e8f0,color:#334155
+          style CALL fill:#eef2ff,stroke:#c7d2fe,color:#3730a3
           style ENDX fill:#f0fdf4,stroke:#bbf7d0,color:#166534
           style FUP fill:#fff5f6,stroke:#fecdd3,color:#9f1239
+          style LEADGEN fill:#f6f4ff,stroke:#ddd6fe,color:#5b21b6
         </div>
       </div>
       <div class="canvas-hint" id="hint">Scroll to zoom · drag to pan · cyan nodes are the fields your dashboard collects</div>
@@ -387,28 +318,23 @@
 </div>
 
 <script>
-const CREW_COLORS = { Intake:"#3b82f6", Prep:"#8b5cf6", Command:"#f59e0b", Field:"#6366f1", "Sub-agents":"#14b8a6", "Follow-through":"#f43f5e", Infra:"#64748b" };
+const CREW_COLORS = { Intake:"#3b82f6", Prep:"#8b5cf6", Field:"#6366f1", "Sub-agents":"#14b8a6", "Follow-through":"#f43f5e", Infra:"#64748b" };
 const ROSTER = [
-  ["Scout","src/scrape.ts","Intake","Hunts prospects across Google Maps, Yellow Pages &amp; Hotfrog."],
-  ["Porter","src/upload.ts","Intake","Carries in CSV / Excel lists, normalized and deduped."],
-  ["Catcher","src/webform.ts","Intake","Catches web-form submissions at the account's webhook URL."],
-  ["Profiler","src/icp.ts","Prep","Turns the plain-English ICP into the search terms to hunt."],
-  ["Sleuth","src/enrich.ts","Prep","Researches each lead so the agent walks in informed."],
-  ["Guardian","src/compliance.ts","Prep","The gate — drops opt-outs &amp; DNC numbers."],
-  ["Dispatcher","src/daily.ts","Command","Decides who gets called today — caps, retries, hours, holidays, capacity."],
-  ["Herald","src/call.ts","Field","Places the call and runs the full cycle."],
-  ["Ghostwriter","(in Herald)","Field","Writes the agent's briefing + business knowledge for each call."],
-  ["The Voice","VAPI agent","Field","The one the customer actually talks to."],
-  ["Quartermaster","src/tools.ts","Sub-agents","Hands the Voice its tools mid-call."],
+  ["Switchboard","src/server.ts","Infra","The public front door — figures out which account owns an inbound call. Never dials out."],
+  ["The Voice","VAPI agent","Field","The one the caller actually talks to."],
+  ["Quartermaster","src/tools.ts","Sub-agents","Hands the Voice its tools mid-call, resolves the account, logs opt-outs."],
   ["Timekeeper","src/calendar.ts","Sub-agents","Reads the real calendar for open slots."],
-  ["Concierge","src/booking.ts","Sub-agents","Books the meeting, live, on the call."],
-  ["Scribe","capture_fields","Sub-agents","Writes down answers — qualify, survey, complaint, callback."],
-  ["Arbiter","src/outcome.ts","Follow-through","Judges the call result and routes it."],
-  ["Nudge","src/reminders.ts","Follow-through","Calls the prospect ~1h before to confirm."],
-  ["Crier","src/notify.ts","Follow-through","Announces every booking to Slack."],
-  ["Switchboard","src/server.ts","Infra","The public front door — both webhooks."],
+  ["Concierge","src/booking.ts","Sub-agents","Books the meeting live, on the call — asks reminder consent if the add-on is on."],
+  ["Scribe","capture_fields (in tools.ts)","Sub-agents","Writes down answers — complaint, message, callback."],
+  ["Nudge","src/reminders.ts","Follow-through","The No-Show Reduction sweep — only ever calls someone who said yes, live, to that exact booking."],
+  ["Crier","src/notify.ts","Follow-through","Announces every booking to Slack + email."],
+  ["Scout","src/scrape.ts","Intake","Hunts prospects across Google Maps, Yellow Pages &amp; Hotfrog — Lead Generation only, never calls."],
+  ["Profiler","src/icp.ts","Prep","Turns the plain-English ICP into the search terms Scout hunts with."],
+  ["Sleuth","src/enrich.ts","Prep","Researches each lead and tags a buying-intent signal — never calls anyone."],
+  ["Porter","src/upload.ts","Intake","Carries in a client's own CSV list, normalized and deduped."],
+  ["Catcher","src/webform.ts","Intake","Catches web-form submissions as a new lead — capture only, never auto-calls."],
+  ["Archivist","src/export.ts","Infra","Exports the lead list as a clean file."],
   ["Vault","src/lib/supabase.ts","Infra","The shared memory every agent reads &amp; writes."],
-  ["Archivist","src/export.ts","Infra","Exports the records as a clean list."],
 ];
 document.getElementById("roster").innerHTML = ROSTER.map(([nm,file,crew,role])=>{
   const c = CREW_COLORS[crew] || "#64748b";
@@ -417,14 +343,13 @@ document.getElementById("roster").innerHTML = ROSTER.map(([nm,file,crew,role])=>
 
 const INPUTS = [
   ["Organization",false,[["Business name","business_name"],["Contact name","contact_name"],["Contact email","contact_email"],["Contact phone","contact_phone"],["Client timezone","timezone"]]],
-  ["Service → sub-service → preset(s) · multi-select",false,[["7 services → sub-service maps to: Sales · Qualification · Receptionist · Complaint · Lead-Gen · Custom","preset"],["Script variant (sub-service script)","script_variant"]]],
-  ["Calling script",false,[["Use preset/variant default — OR — write/paste client's own script (override, fed to VAPI verbatim)","system_prompt"]]],
-  ["Set by the preset",true,[["Which endings the agent gets","enabled_tools"],["Direction (in/out)","—"],["Sources on/off","sources"],["Agent script (unless overridden above)","system_prompt"],["First message","first_message"],["Success definition","success_definition"]]],
-  ["The agent",false,[["Voice (dropdown)","voice_id"],["Knowledge base — FAQ answers","broker_knowledge_base"],["Qualifying questions","qualifying_questions"]]],
-  ["Targeting",false,[["ICP description (2-4 lines)","icp_description"],["Target city","geo_city"],["Target state","geo_state"]]],
-  ["Phone numbers",false,[["Outbound + inbound number(s)","vapi_phone_numbers"],["Caller-ID name","caller_id_name"]]],
-  ["Calling rules",false,[["Daily dial cap / number","daily_dial_cap"],["Calling hours start/end","calling_hours_*"],["Retry rules","retry_rules"],["Refill threshold","refill_threshold"]]],
-  ["Booking",false,[["Calendar connection — id + credentials (per account)","google_calendar_*"],["Meeting length / buffer","meeting_*_minutes"],["Meeting link","booking.meeting_link"],["Booking capacity","booking_capacity"]]],
+  ["Service · pick 1 of 3",false,[["AI Receptionist · Support Line · Lead Generation &amp; Enrichment","service_configs"],["No-Show Reduction add-on (Receptionist only, paid)","reminders_addon_enabled"]]],
+  ["Calling script",false,[["Use the preset default — OR — write/paste the client's own script (override, fed to VAPI verbatim)","system_prompt"]]],
+  ["Set by the preset",true,[["Which endings the agent gets","enabled_tools"],["Agent script (unless overridden above)","system_prompt"],["First message","first_message"],["Success definition","success_definition"]]],
+  ["The agent",false,[["Voice (dropdown)","voice_id"],["Knowledge base — FAQ answers","broker_knowledge_base"]]],
+  ["Lead Generation targeting (that service only)",false,[["ICP description","icp_description"],["Buying-intent signal","intent_signal_description"],["Target city / state","geo_city / geo_state"],["Sources — any combination","sources"],["Leads per run (cost control)","lead_cap_per_run"]]],
+  ["Phone numbers",false,[["Inbound number(s)","vapi_phone_numbers"]]],
+  ["Booking (AI Receptionist only)",false,[["Calendar connection — id + credentials","google_calendar_*"],["Meeting length / buffer","meeting_*_minutes"],["Meeting link / address","booking.meeting_link"],["Booking capacity","booking_capacity"]]],
   ["Web-form capture",false,[["Your lead-capture URL (read-only)","webhook_token"]]],
   ["Account control",false,[["Active / paused","status"],["Billing (paid → active)","Dodo"]]],
 ];

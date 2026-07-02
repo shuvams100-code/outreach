@@ -1,7 +1,13 @@
 # Reacher AI — Exhaustive Use-Case Map
 
-> What this single codebase can be sold as. The engine is horizontal: a multi-tenant voice agent
-> (outbound + inbound) + lead-gen (scrape/enrich/dedup) + calendar booking + compliance. Each "service"
+> **2026-07-02: Section A below (all outbound calling) was removed from the product — TCPA risk,
+> no consent basis for scraped/uploaded leads. See `docs/design-log.md` and `docs/service-catalog.md`
+> for the current 3-service reality (AI Receptionist + optional No-Show Reduction add-on, Support
+> Line, Lead Generation & Enrichment). Section A is kept below as a historical record of what was
+> explored/built, not a roadmap — do not build any of it without a real consent story first.**
+
+> What this single codebase can be sold as. The engine is horizontal: an inbound voice agent
+> + lead-gen (scrape/enrich/dedup) + calendar booking + compliance. Each "service"
 > below is the **same engine** with a different **ending** (what the agent does at the end of a call)
 > and sometimes a different **trigger** (what starts it). Nothing here is industry-locked.
 

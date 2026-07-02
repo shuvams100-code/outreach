@@ -4,6 +4,29 @@ A running record of every visual/design decision: colors, shapes, components, ty
 
 ---
 
+## 2026-07-02 (outbound calling removed entirely — TCPA; product now 3 services)
+
+### Product decision, not a technical one
+AI-generated voice calls are "artificial voice" calls under the TCPA (FCC, Feb 2024 ruling) — calling a cell phone with one requires prior express written consent in 47 states, no B2B carve-out. Scraped/uploaded cold leads have zero consent basis. Rather than build phone-type classification (mobile vs. landline — the one narrow legal path for cold numbers) and a consent/attestation system, the call was made to **drop outbound calling entirely** and double down on the two things that don't carry this risk: inbound (the caller consents by dialing in) and data delivery (no call placed at all).
+
+### Removed — 5 services, 4 backend files, ~1 file previously believed to have automation that didn't exist
+- **Services deleted:** Outbound Sales / Appt Setting, Reactivation & Renewals, Lead Qualification, Appointment Reminders & Recovery (the old standalone version), List Cleaning & DNC Scrubbing (never built; existed only to feed outbound dialing). Presets `outbound_sales`, `lead_qualification`, `ai_reminders`, `list_clean` removed from `presets.ts`.
+- **Backend deleted:** `daily.ts` (outbound daily-dial orchestrator, including last session's scrape-refill auto-chain — moot without outbound), `outcome.ts` (call-outcome classification, outbound-only), `compliance.ts` (`scrubAccount`, only fed outbound dialing), `webhook-vapi.ts` (`processVapiCallEnd` — audited, was never wired to any route anywhere in the repo; deleting it was zero-risk).
+- **`call.ts` split, not deleted:** `loadCallAccount`/`buildCallOverrides`/`placeCall`/`pollCall` survive — genuinely shared with inbound setup tooling (`setup-inbound.ts`, `create-test-assistant.ts`) and the reminder sweep below. `callContact`/`isCurrentlyCallable` (the cold-dial-a-lead machinery) removed.
+- **`webform.ts`**: kept lead capture, removed the "speed-to-lead" auto-call that used to fire on form submission — same consent problem as scraping.
+- **3 services remain:** AI Receptionist, Support / Complaint Line, Lead Generation & Enrichment. Onboarding picker renumbered 1–3.
+
+### No-Show Reduction — the one calling feature that survived, redesigned as a consent-gated add-on
+User's own follow-up question caught the actual legal nuance: appointment reminders are **informational, not telemarketing**, under the TCPA — informational calls need only *oral* prior express consent (can be captured live, mid-conversation), not the signed written consent telemarketing requires. So a reminder call is legal **if and only if** the caller was actually asked and said yes, during their own booking call.
+- **Not a service — a paid add-on checkbox inside AI Receptionist's own config** (Section 6, "No-Show Reduction"). User was explicit: standalone-service manual-only made sense for the old design, but this needed to be separately toggleable/billable without being its own top-level product.
+- **`accounts.reminders_addon_enabled`** (paid switch, account-level) + **`bookings.reminder_consent`** (did THIS caller say yes to THIS appointment, captured live) — both new columns. Two independent gates: the account must have bought it AND this specific booking must carry consent. Neither alone is enough.
+- Consent capture: `book_appointment` tool gained a `reminder_opt_in` arg; when the add-on is on, the composed system prompt (appended after `applyPreset`, since preset composition rebuilds the prompt from scratch on every save — see `reassertRemindersAddon` in `serviceBackend.js`) instructs the agent to ask before booking and pass the answer.
+- **Reschedule carries consent forward** — a reschedule is the same appointment/relationship continuing, not a fresh solicitation, so `handleBookAppointment` copies `reminder_consent` from the booking being rescheduled rather than requiring the agent to ask again. This is also what makes the "reminder fires again ahead of the new time" loop work — the new booking row naturally gets a fresh `reminder_1h_sent_at = null`.
+- `reminders.ts` (`runReminderSweep`) kept, not deleted — it's narrow and self-contained (only ever touches bookings with live-captured consent, never `leads` cold-calling state) and now gates on both consent columns. AI-disclosure line added to the reminder call's opener.
+- Scoped narrowly on purpose: this only works for Receptionist-sourced bookings (the only place consent gets captured) — it cannot be stretched to cover Reactivation-style outbound win-back calls, which are exactly the removed, non-consented case.
+
+---
+
 ## 2026-07-02 (correction: bundled lead-gen must be automatic, not manual)
 
 ### "Manual only" from the entry below was one part of the answer, not all of it

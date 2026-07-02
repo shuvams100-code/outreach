@@ -4,92 +4,67 @@
 
 ---
 
+## 2026-07-02: outbound calling removed entirely
+
+AI-generated voice calls are "artificial voice" calls under the TCPA — calling a cell phone with one requires prior express written consent, no B2B carve-out, and scraped/uploaded cold leads have no consent basis. Outbound Sales / Appointment Setting, Reactivation & Renewals, Lead Qualification, Appointment Reminders & Recovery (the old standalone version), and List Cleaning are gone — not deprioritized, deleted (code, presets, UI). Full reasoning in `docs/design-log.md` (2026-07-02).
+
+One calling capability survived, redesigned around actual consent: **No-Show Reduction**, a paid add-on inside AI Receptionist (not a standalone service) — see below.
+
+---
+
 ## What actually makes a service different
 
 Only **three levers** change what the engine does:
 
-1. **Direction** — inbound (they call us) or outbound (we call them).
-2. **Ending** — what the agent may do at the end: **Book** a meeting · **Capture** information · **Answer** from the knowledge base. (Data-only services have no agent at all.)
-3. **List / trigger** — who it works on: fresh prospects we find, a list the client uploads, the client's **own existing customers**, or appointment dates.
-
-Everything else — "full pitch vs light pitch," "reactivation vs win-back," "confirmation vs no-show" — is **the script**. A script is a setting, not a separate service.
+1. **Direction** — inbound (they call us) only now. No agent ever initiates a call to someone who hasn't already reached out or explicitly consented on a live call.
+2. **Ending** — what the agent may do at the end: **Book** a meeting · **Capture** information · **Answer** from the knowledge base. (Data-only has no agent at all.)
+3. **List / trigger** — who it works on: inbound callers, or (data-only) a list to find and research.
 
 ---
 
-## The real engine modes (this is the whole machine)
+## The real engine modes
 
 | # | Mode | Direction | Ending | Typical list/trigger |
 |---|------|-----------|--------|----------------------|
-| 1 | **Outbound → Book** | out | Book | prospects, or the client's own contacts |
-| 2 | **Outbound → Capture** | out | Capture | prospects or an uploaded list |
-| 3 | **Appointment Reminders** | out | Book / Capture | appointment dates |
-| 4 | **Inbound → Answer** | in | Book / Capture / Answer | inbound callers |
-| 5 | **Data only (no agent)** | — | — | a list to find, clean, or enrich |
+| 1 | **Inbound → Answer** | in | Book / Capture / Answer | inbound callers |
+| 2 | **Data only (no agent)** | — | — | a list to find and research |
+| — | **No-Show Reduction** (add-on, not a mode of its own) | out, but consent-gated | Book (reschedule) | bookings the caller consented to being reminded about, made through Mode 1 |
 
-**Five modes.** Every offering below is one of these five with a list setting and a script on top.
+**Two real modes**, plus one narrowly-scoped consent-gated calling feature layered on top of Mode 1.
 
 ---
 
 ## What we can honestly sell separately
 
-Each heading is something a client would actually recognise and pay for as a distinct thing. "Merged in" = old names that were really the same engine.
-
-### Mode 1 — Outbound, Book a meeting
-- **Outbound Sales / Appointment Setting** — we call prospects and put meetings on the calendar.
-  *Merged in:* **AI SDR** and **Appointment Setting** — identical engine; the only difference was how hard the agent pitches. That's one line in the script.
-- **Reactivation & Renewals** — we call the client's **own** dormant or expiring contacts and book them back in.
-  *Merged in:* **Database Reactivation** and **Renewals & Win-back** — same engine; both call a list the client already owns. Only the script angle differs.
-  *Sold separately because:* different list (their warm contacts, not cold prospects) and a different buyer conversation. Genuinely its own thing.
-
-### Mode 2 — Outbound, Capture answers
-- **Lead Qualification** — we call leads, ask the qualifying questions, score them, hand back who's hot.
-  *Same engine, different buyer:* **Survey / Market Research** (same call-and-record, research questions instead of sales ones) and **Recruitment Screening** (qualification + book an interview). These are the qualification engine with a different script — for screening, with booking switched on. Sell the name that fits the buyer; build it once.
-
-### Mode 3 — Appointment Reminders
-- **Appointment Reminders** — we call upcoming or missed appointments to confirm or rebook, cutting no-shows.
-  *Merged in:* **Confirmation Calls**, **No-Show Recovery**, **Event Reminders** — one service, three scripts. The only real difference from Modes 1–2 is the trigger: it runs off appointment dates, not a lead list.
-
-### Mode 4 — Inbound, Answer the phone
+### Mode 1 — Inbound, Answer the phone
 - **AI Receptionist** — answers, books, takes messages, answers FAQs.
-  *Merged in:* **Business hours / After-hours / 24-7** — same agent; the hours are a setting.
+  *Merged in:* Business hours / After-hours / 24-7 — same agent; the hours are a setting.
+  *Add-on, priced separately:* **No-Show Reduction** — after booking, the agent asks the caller for permission to call back an hour before as a reminder (offering to reschedule if they can't make it). Only ever fires for callers who said yes, live, on that call — informational-call consent under the TCPA, not telemarketing, so oral consent is sufficient. Consent is captured per-booking and carries forward automatically on reschedule. Scoped to Receptionist bookings only — cannot be extended to outbound win-back calling, which is exactly the removed non-consented case.
 - **Support / Complaint Line** — answers and logs the issue with a reference number; does **not** book.
-  *Sold separately because:* this is the one genuine engine difference inside inbound — booking is turned off and it only captures.
+  *Sold separately because:* the one genuine engine difference inside inbound — booking is turned off and it only captures.
 
-### Mode 5 — Data only (no calling)
-- **Lead Generation & Enrichment** — a clean, deduped list of target businesses with phone numbers, each researched (website, email, profile, fit, and optional buying-intent signal).
-  *Merged in:* **ICP Prospecting** (same scrape, a sentence describing the ideal customer turns into search terms — a setting, not a service) **and Lead Enrichment** (2026-07-02: decided against selling separately — enrichment was never actually dependent on generation in the engine, it researches whatever's in the lead list whether that list was scraped here or brought/uploaded by the client. Generate and Enrich are two independent toggles on the same screen, not two products).
-- **List Cleaning** — validate numbers, remove duplicates, scrub opt-outs, tag timezones.
-  *Merged in:* those four were never separate — they're the steps that all run together when you clean a list.
-
-### The bundle
-- **Full Funnel / Done-For-You** — find leads → call and book → answer the callbacks. Mode 5 + Mode 1 + Mode 4 sold as one managed package. Not new tech; a premium wrapper.
+### Mode 2 — Data only (no calling, no TCPA exposure — no call is ever placed)
+- **Lead Generation & Enrichment** — a clean, deduped list of target businesses with phone numbers, each researched (website, email, profile, fit, optional buying-intent signal). Two independent toggles (generate, enrich) on one screen — not two products, and enrichment isn't dependent on generation (it works on any lead, scraped or uploaded).
+  *Merged in:* ICP Prospecting (a sentence describing the ideal customer turns into search terms — a setting) and Lead Enrichment (2026-07-02: decided against selling separately, see above).
 
 ---
 
 ## The honest count
 
-- **Engine modes we actually build & maintain:** **5**.
-- **Things we can sell as genuinely separate:** **8** (was 9 — Lead Generation and Lead Enrichment merged 2026-07-02, see Mode 5 above) — Outbound Sales · Reactivation & Renewals · Lead Qualification · Appointment Reminders · AI Receptionist · Support Line · Lead Generation & Enrichment · List Cleaning — **plus the Full Funnel bundle**.
-- **Names that were never separate products** (now scripts/settings): AI SDR vs Appointment Setting · Database Reactivation vs Win-back · Survey · Recruitment Screening · the 3 reminder types · the 4 cleaning steps · the 3 receptionist hour-modes · ICP Prospecting · Lead Enrichment (a toggle on Lead Generation, not its own product).
+- **Engine modes we actually build & maintain:** **2**, plus the No-Show Reduction add-on.
+- **Things we can sell as genuinely separate:** **3** — AI Receptionist (+ optional No-Show Reduction add-on) · Support / Complaint Line · Lead Generation & Enrichment.
+- **Names that were never separate products** (now scripts/settings, or removed): the 3 receptionist hour-modes · ICP Prospecting · Lead Enrichment (a toggle, not its own product) · everything that used to be Outbound Sales / Reactivation / Lead Qualification / Appointment Reminders / List Cleaning — removed, not merged.
 
-> **5 real machines · ~8–9 things to sell · a pile of names that are just scripts on top.** Sell the names clients recognise; never pretend they're different products underneath.
+> **2 real machines + 1 consent-gated add-on. Sell the names clients recognise; never pretend they're different products underneath — and never bring back outbound calling on scraped/uploaded leads without a real consent story.**
 
 ---
 
-## Mapping: what we sell → engine preset + script variant
+## Mapping: what we sell → engine preset
 
-The code already models exactly this — each sellable service is a preset, and the merged names are `script_variant`s of it (see `src/presets.ts`).
+| Sellable service | Engine preset | Notes |
+|------------------|---------------|-------|
+| AI Receptionist | `inbound_receptionist` | No-Show Reduction is an account-level flag (`accounts.reminders_addon_enabled`) + per-booking consent (`bookings.reminder_consent`), not a preset — see `docs/mock-and-wiring.md` |
+| Support / Complaint Line | `complaint_intake` | booking off, capture only |
+| Lead Generation & Enrichment | `lead_gen` + `lead_enrich` (both, stacked — generation and enrichment are independent toggles) | `icp_prospecting` (search terms from ICP text) — label only, data-only presets have no script |
 
-| Sellable service | Engine preset | Script variants (the "merged in" names) |
-|------------------|---------------|------------------------------------------|
-| Outbound Sales / Appt Setting | `outbound_sales` | default (AI SDR), `appointment_setting` |
-| Reactivation & Renewals | `outbound_sales` | `db_reactivation`, `renewals_winback` (calls the client's own list) |
-| Lead Qualification | `lead_qualification` | default, `survey_research`, `recruitment_screening` (+ booking) |
-| Appointment Reminders | `ai_reminders` | `confirmation`, `no_show_recovery`, `event_reminder` |
-| AI Receptionist | `inbound_receptionist` | hours via `calling_window` setting |
-| Support / Complaint Line | `complaint_intake` | — (booking off, capture only) |
-| Lead Generation & Enrichment | `lead_gen` + `lead_enrich` (both, stacked — generation and enrichment are independent toggles, not separate presets to choose between) | `icp_prospecting` (search terms from ICP text) |
-| List Cleaning | `list_clean` | runs validate + dedupe + opt-out + timezone together |
-| Full Funnel (bundle) | `lead_gen` + `outbound_sales` + `inbound_receptionist` | stacked |
-
-> The onboarding UI should follow this: pick one of the **8 sellable services**, then a **script variant** where it has one, then the **list source** — not 20 separate buttons.
+> The onboarding UI follows this: pick one of the **3 sellable services**, then the list source / add-on where it has one.

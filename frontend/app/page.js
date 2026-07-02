@@ -519,7 +519,6 @@ export default function Home() {
 
   // Section 1: Agent & Script states
   const [scriptVariant, setScriptVariant] = useState("default");
-  const [isVariantDropdownOpen, setIsVariantDropdownOpen] = useState(false);
   const [scriptText, setScriptText] = useState("");
   const [openingLine, setOpeningLine] = useState("");
   const [successMetric, setSuccessMetric] = useState("");
@@ -527,11 +526,8 @@ export default function Home() {
   const [isVoiceDropdownOpen, setIsVoiceDropdownOpen] = useState(false);
   const [modelSelection, setModelSelection] = useState("gpt-4o-mini");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false);
-  const variantRef = useRef(null);
   const voiceRef = useRef(null);
   const modelRef = useRef(null);
-  const depthRef = useRef(null);
 
   // Section 3: Who it calls
   const [icpDescription, setIcpDescription] = useState("");
@@ -543,17 +539,10 @@ export default function Home() {
   const [scrapeRadius, setScrapeRadius] = useState("10");
   const [scrapeBusinessType, setScrapeBusinessType] = useState("");
   
-  // Lead Qualification (service 3): the questions to ask + what counts as qualified + recruitment toggle.
-  const [qualifyingQuestions, setQualifyingQuestions] = useState([""]);
-  const [qualifiedCriteria, setQualifiedCriteria] = useState("");
-  const [recruitmentEnabled, setRecruitmentEnabled] = useState(false); // only meaningful in Qualify mode → reveals booking
-
-  // Appointment Reminders states
-  const [remindSourceBooked, setRemindSourceBooked] = useState(false);
-  const [remindSourceCalendar, setRemindSourceCalendar] = useState(false);
-  const [remindSourceUpload, setRemindSourceUpload] = useState(false);
-  const [reminderTimingValue, setReminderTimingValue] = useState("1");
-  const [reminderTimingUnit, setReminderTimingUnit] = useState("hours");
+  // No-Show Reduction: paid add-on checkbox inside AI Receptionist's own config (not a separate
+  // service — see docs/design-log.md 2026-07-02). Consent itself is captured live, per-booking,
+  // by the agent — this flag only controls whether the account bought the add-on at all.
+  const [remindersAddonEnabled, setRemindersAddonEnabled] = useState(false);
 
   // Inbound Services states
   const [inboundNumbers, setInboundNumbers] = useState([{ number: "" }]);
@@ -579,26 +568,14 @@ export default function Home() {
   const [meetingBuffer, setMeetingBuffer] = useState("15");
   const [bookingCapacity, setBookingCapacity] = useState("20");
 
-  // Section 6: Phone line & numbers
-  const [phoneNumbers, setPhoneNumbers] = useState([
-    { number: "", cap: 40 }
-  ]);
   const [callingHoursStart, setCallingHoursStart] = useState("09:00");
   const [callingHoursEnd, setCallingHoursEnd] = useState("18:00");
   const [callingTimezone, setCallingTimezone] = useState("America/New_York");
   const [isTimezoneDropdownOpen, setIsTimezoneDropdownOpen] = useState(false);
 
   // Surfaced Auto-Config Collapse States
-  const [isRetryPacingCollapsed, setIsRetryPacingCollapsed] = useState(true);
-  const [isVoicemailCollapsed, setIsVoicemailCollapsed] = useState(true);
   const [isComplianceCollapsed, setIsComplianceCollapsed] = useState(true);
-  const [isEnrichmentCollapsed, setIsEnrichmentCollapsed] = useState(true);
-  const [isScrapeSourcesCollapsed, setIsScrapeSourcesCollapsed] = useState(true);
   const [isCallLimitsCollapsed, setIsCallLimitsCollapsed] = useState(true);
-  // Advanced auto-config values (preset defaults, editable). No voicemail field — we never leave one.
-  const [maxCallAttempts, setMaxCallAttempts] = useState("3");
-  const [retryGapDays, setRetryGapDays] = useState("3");
-  const [dailyCapPerNumber, setDailyCapPerNumber] = useState("40");
   const [enrichEnabled, setEnrichEnabled] = useState(true);
   const [enrichmentDepth, setEnrichmentDepth] = useState("Standard Profile + Website");
   const [scrapeSources, setScrapeSources] = useState(["Google Maps", "Yellow Pages", "Hotfrog"]);
@@ -645,10 +622,8 @@ export default function Home() {
       if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) setActiveFilterColumn(null);
       if (paymentClientRef.current && !paymentClientRef.current.contains(e.target)) setPaymentClientOpen(false);
       if (timezoneRef.current && !timezoneRef.current.contains(e.target)) setTimezoneOpen(false);
-      if (variantRef.current && !variantRef.current.contains(e.target)) setIsVariantDropdownOpen(false);
       if (voiceRef.current && !voiceRef.current.contains(e.target)) setIsVoiceDropdownOpen(false);
       if (modelRef.current && !modelRef.current.contains(e.target)) setIsModelDropdownOpen(false);
-      if (depthRef.current && !depthRef.current.contains(e.target)) setIsDepthDropdownOpen(false);
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -960,37 +935,6 @@ export default function Home() {
     }
   };
 
-  const handleGenerateScript = () => {
-    const modeText = meetingMode ? `via ${meetingMode} mode` : "";
-    const offerText = clientOffer ? `the offer: "${clientOffer}"` : "our services";
-    const icpText = icpDescription ? `targeting: ${icpDescription}` : "our target audience";
-    
-    let generated = "";
-    if (configuringService === "Reactivation & Renewals") {
-      if (scriptVariant === "renewals_winback") {
-        generated = `You are calling customers of the business described in your context whose contract or subscription is expiring or recently lapsed.
-Your primary goal is to save the account, discuss renewing their subscription, and explain the value of continuing.
-Warmly reference their relationship with us, highlight the value they stand to lose if they lapse, and handle any hesitation or objections calmly.
-When they agree to set up a renewal or continue their service, check calendar availability and book the slot.
-Never pressure; make staying easy and pleasant.`;
-      } else {
-        generated = `You are calling past or dormant leads on behalf of the business described in your context who previously showed interest but went quiet.
-Your primary goal is to re-engage them, check if their need or interest is still active, and offer ${offerText}.
-Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest.
-If they are open, check calendar availability and book a time to get them back on the calendar.
-Be gracious, warm, and helpful. If they've moved on, thank them politely.`;
-      }
-    } else {
-      generated = `You are a warm, sharp, persuasive outbound sales rep calling on behalf of the business.
-Your primary goal is to pitch ${offerText} to prospects ${icpText}.
-Speak naturally, asking one question at a time. Qualify the prospect lightly.
-When they express interest in booking a demo/meeting ${modeText}, check calendar availability and book the slot.
-Always handle objections politely.`;
-    }
-    
-    setScriptText(generated);
-  };
-
   // Every field the config screen collects, for whichever service is open. Shared by
   // handleActivateService/handleSaveDraft (local state) and the real API write-through.
   const buildServiceConfigPayload = (isDraft) => ({
@@ -998,22 +942,19 @@ Always handle objections politely.`;
     icpDescription, intentSignalDescription, isUploadListChecked, isScrapeChecked, scrapeCity, scrapeState, scrapeRadius, scrapeBusinessType,
     clientOffer, knowledgeBase, attachedDocuments, meetingMode, meetingLink, meetingAddress, availabilityWindows,
     meetingLength, meetingBuffer, bookingCapacity,
-    qualifyingQuestions, qualifiedCriteria, recruitmentEnabled,
-    remindSourceBooked, remindSourceCalendar, remindSourceUpload, reminderTimingValue, reminderTimingUnit,
+    remindersAddonEnabled,
     inboundNumbers: inboundNumbers.filter(p => p.number.trim() !== ""),
     coverageMode, warmTransferEnabled, warmTransferNumber, warmTransferHoursStart, warmTransferHoursEnd,
-    phoneNumbers: phoneNumbers.filter(p => p.number.trim() !== ""),
     callingHoursStart, callingHoursEnd, callingTimezone,
-    maxCallAttempts, retryGapDays, dailyCapPerNumber,
     enrichEnabled, enrichmentDepth, scrapeSources,
     maxCallLength, maxLeadsPerRun,
     isDraft,
   });
 
   const handleActivateService = async () => {
-    // Lead Qualification (without recruitment), Appointment Reminders, and Support Line need no meeting; otherwise required.
-    const noMeetingServices = ["Lead Qualification", "Appointment Reminders", "Support / Complaint Line", "Lead Generation"];
-    const needsMeeting = !noMeetingServices.includes(configuringService) || (configuringService === "Lead Qualification" && recruitmentEnabled);
+    // Support Line and Lead Generation need no meeting (capture-only / data-only); AI Receptionist does.
+    const noMeetingServices = ["Support / Complaint Line", "Lead Generation"];
+    const needsMeeting = !noMeetingServices.includes(configuringService);
     if (needsMeeting && !meetingMode) return; // required check
     const c = onboardedClient;
     if (!c) return;
@@ -1098,119 +1039,86 @@ Always handle objections politely.`;
 
   const handleConfigureService = (serviceId) => {
     setConfiguringService(serviceId);
-    // Lead-qual fields reset clean on every open; saved/defaults override below.
-    setQualifyingQuestions([""]); setQualifiedCriteria(""); setRecruitmentEnabled(false);
-    
-    // Appointment Reminders fields reset clean:
-    setRemindSourceBooked(false);
-    setRemindSourceCalendar(false);
-    setRemindSourceUpload(false);
-    setReminderTimingValue("1");
-    setReminderTimingUnit("hours");
 
-    if (serviceId === "Outbound Sales / Appt Setting" || serviceId === "Reactivation & Renewals" || serviceId === "Lead Qualification" || serviceId === "Appointment Reminders" || serviceId === "Lead Generation") {
+    if (serviceId === "AI Receptionist" || serviceId === "Support / Complaint Line") {
       const saved = onboardedClient?.serviceConfigs?.[serviceId];
+      const isReceptionist = serviceId === "AI Receptionist";
       if (saved) {
-        setScriptVariant(saved.scriptVariant || (serviceId === "Reactivation & Renewals" ? "db_reactivation" : serviceId === "Appointment Reminders" ? "confirmation" : "default"));
         setScriptText(saved.scriptText || "");
         setOpeningLine(saved.openingLine || "");
         setSuccessMetric(saved.successMetric || "");
         setVoiceSelection(saved.voiceSelection || "default");
         setModelSelection(saved.modelSelection || "gpt-4o-mini");
+        setKnowledgeBase(saved.knowledgeBase || "");
+        setAttachedDocuments(saved.attachedDocuments || []);
+        setInboundNumbers(saved.inboundNumbers?.length ? saved.inboundNumbers : [{ number: "" }]);
+        setCoverageMode(saved.coverageMode || "business_hours");
+        setCallingHoursStart(saved.callingHoursStart || "09:00");
+        setCallingHoursEnd(saved.callingHoursEnd || "18:00");
+        setCallingTimezone(saved.callingTimezone || onboardedClient?.timezone || "America/New_York");
+        setWarmTransferEnabled(saved.warmTransferEnabled || false);
+        setWarmTransferNumber(saved.warmTransferNumber || "");
+        setWarmTransferHoursStart(saved.warmTransferHoursStart || "09:00");
+        setWarmTransferHoursEnd(saved.warmTransferHoursEnd || "18:00");
+        setMaxCallLength(saved.maxCallLength || "5");
+        if (isReceptionist) {
+          setMeetingMode(saved.meetingMode || "");
+          setMeetingLink(saved.meetingLink || "");
+          setMeetingAddress(saved.meetingAddress || "");
+          setAvailabilityWindows(saved.availabilityWindows || [{ day: "Monday", start: "09:00", end: "17:00" }]);
+          setMeetingLength(saved.meetingLength || "30");
+          setMeetingBuffer(saved.meetingBuffer || "15");
+          setBookingCapacity(saved.bookingCapacity || "20");
+          setRemindersAddonEnabled(saved.remindersAddonEnabled || false);
+        }
+      } else {
+        // No saved config yet — same opening line/script/success text as the account's own preset
+        // default (presets.ts inbound_receptionist / complaint_intake), so a first-time open isn't blank.
+        setScriptText(isReceptionist
+          ? "You are a friendly, professional receptionist answering calls for the business described in your context. Greet warmly and find out what the caller needs. Answer their questions accurately using what you know about the business. If they want an appointment, call check_availability then book_appointment. If you can't fully help, or they'd like a callback, use capture_fields to record their name, number, and what they need. Never leave a caller without a resolution."
+          : "You are a calm, empathetic support agent answering for the business described in your context. Let the caller explain their problem fully. Gather the key details — including any order or reference number. Then call capture_fields to log the complaint (set type to \"complaint\") with the order id and details. Reassure them the team will follow up.");
+        setOpeningLine(isReceptionist ? "Thanks for calling — how can I help you today?" : "Thanks for calling support — I'm here to help. What's going on?");
+        setSuccessMetric(isReceptionist ? "The caller's need handled — answered, booked, or a message captured." : "Complaint logged with order ID and details for follow-up.");
+        setVoiceSelection("default");
+        setModelSelection("gpt-4o-mini");
+        setKnowledgeBase("");
+        setAttachedDocuments([]);
+        setInboundNumbers([{ number: "" }]);
+        setCoverageMode("business_hours");
+        setCallingHoursStart("09:00");
+        setCallingHoursEnd("18:00");
+        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
+        setWarmTransferEnabled(false);
+        setWarmTransferNumber("");
+        setWarmTransferHoursStart("09:00");
+        setWarmTransferHoursEnd("18:00");
+        setMaxCallLength("5");
+        if (isReceptionist) {
+          setMeetingMode("");
+          setMeetingLink("");
+          setMeetingAddress("");
+          setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
+          setMeetingLength("30");
+          setMeetingBuffer("15");
+          setBookingCapacity("20");
+          setRemindersAddonEnabled(false);
+        }
+      }
+    } else if (serviceId === "Lead Generation") {
+      const saved = onboardedClient?.serviceConfigs?.[serviceId];
+      if (saved) {
         setIcpDescription(saved.icpDescription || "");
         setIntentSignalDescription(saved.intentSignalDescription || "");
-        setIsUploadListChecked(saved.isUploadListChecked !== undefined ? saved.isUploadListChecked : true);
-        setIsScrapeChecked(saved.isScrapeChecked !== undefined ? saved.isScrapeChecked : false);
+        setIsScrapeChecked(saved.isScrapeChecked !== undefined ? saved.isScrapeChecked : true);
         setScrapeCity(saved.scrapeCity || "");
         setScrapeState(saved.scrapeState || "");
         setScrapeRadius(saved.scrapeRadius || "10");
         setScrapeBusinessType(saved.scrapeBusinessType || "");
-        setClientOffer(saved.clientOffer || "");
-        setKnowledgeBase(saved.knowledgeBase || "");
-        setAttachedDocuments(saved.attachedDocuments || []);
-        setMeetingMode(saved.meetingMode || "");
-        setMeetingLink(saved.meetingLink || "");
-        setMeetingAddress(saved.meetingAddress || "");
-        setAvailabilityWindows(saved.availabilityWindows || [{ day: "Monday", start: "09:00", end: "17:00" }]);
-        setMeetingLength(saved.meetingLength || "30");
-        setMeetingBuffer(saved.meetingBuffer || "15");
-        setBookingCapacity(saved.bookingCapacity || "20");
-        setPhoneNumbers(saved.phoneNumbers?.length ? saved.phoneNumbers : [{ number: "", cap: 40 }]);
-        setCallingHoursStart(saved.callingHoursStart || "09:00");
-        setCallingHoursEnd(saved.callingHoursEnd || "18:00");
-        setCallingTimezone(saved.callingTimezone || onboardedClient?.timezone || "America/New_York");
-        setMaxCallAttempts(saved.maxCallAttempts || "3");
-        setRetryGapDays(saved.retryGapDays || "3");
-        setDailyCapPerNumber(saved.dailyCapPerNumber || "40");
+        setScrapeSources(saved.scrapeSources || ["Google Maps", "Yellow Pages", "Hotfrog"]);
+        setMaxLeadsPerRun(saved.maxLeadsPerRun || "100");
         setEnrichEnabled(saved.enrichEnabled !== undefined ? saved.enrichEnabled : true);
         setEnrichmentDepth(saved.enrichmentDepth || "Standard Profile + Website");
-        setScrapeSources(saved.scrapeSources || ["Google Maps", "Yellow Pages", "Hotfrog"]);
-        setMaxCallLength(saved.maxCallLength || "5");
-        setMaxLeadsPerRun(saved.maxLeadsPerRun || "100");
-        setQualifyingQuestions(saved.qualifyingQuestions?.length ? saved.qualifyingQuestions : [""]);
-        setQualifiedCriteria(saved.qualifiedCriteria || "");
-        setRecruitmentEnabled(saved.recruitmentEnabled || false);
-        setRemindSourceBooked(saved.remindSourceBooked || false);
-        setRemindSourceCalendar(saved.remindSourceCalendar || false);
-        setRemindSourceUpload(saved.remindSourceUpload !== undefined ? saved.remindSourceUpload : false);
-        setReminderTimingValue(saved.reminderTimingValue || "1");
-        setReminderTimingUnit(saved.reminderTimingUnit || "hours");
-      } else if (serviceId === "Lead Qualification") {
-        // No saved config yet — qualification defaults (capture-only). Questions/criteria start empty.
-        setScriptVariant("default");
-        setScriptText("You are calling to qualify prospects for the business described in your context. Ask the qualifying questions naturally, one at a time. Once you've gathered the answers, call capture_fields to save them along with whether the prospect is a good fit (qualified true or false). Be efficient and respectful of their time.");
-        setOpeningLine("Hi, this is the team — do you have a quick minute?");
-        setSuccessMetric("Qualification answers captured for every reachable lead.");
-        setVoiceSelection("default");
-        setModelSelection("gpt-4o-mini");
-        setIcpDescription("");
-        setIsUploadListChecked(true);
-        setIsScrapeChecked(false);
-        setScrapeCity(""); setScrapeState(""); setScrapeRadius("10"); setScrapeBusinessType("");
-        setClientOffer("");
-        setKnowledgeBase("");
-        setAttachedDocuments([]);
-        setMeetingMode(""); setMeetingLink(""); setMeetingAddress("");
-        setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
-        setMeetingLength("30"); setMeetingBuffer("15"); setBookingCapacity("20");
-        setPhoneNumbers([{ number: "", cap: 40 }]);
-        setCallingHoursStart("09:00"); setCallingHoursEnd("18:00");
-        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
-        setMaxCallAttempts("3"); setRetryGapDays("3"); setDailyCapPerNumber("40");
-        setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
-        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
-        setMaxCallLength("5"); setMaxLeadsPerRun("100");
-      } else if (serviceId === "Appointment Reminders") {
-        // No saved config yet — Appointment Reminders defaults.
-        setScriptVariant("confirmation");
-        setScriptText("You are calling to remind someone about an upcoming appointment for the business described in your context. Be friendly and clear. Confirm the date, time, and location. Ask if they can make it. If they need to reschedule, call check_availability and then book_appointment with the new time. If they can't make it, capture the reason with capture_fields. Always end with a clear next step.");
-        setOpeningLine("Hi, this is a reminder from the team about your upcoming appointment — can you confirm you'll be there?");
-        setSuccessMetric("Appointment confirmed, rescheduled, or cancellation reason captured.");
-        setVoiceSelection("default");
-        setModelSelection("gpt-4o-mini");
-        setIcpDescription("");
-        setIsUploadListChecked(true);
-        setIsScrapeChecked(false);
-        setScrapeCity(""); setScrapeState(""); setScrapeRadius("10"); setScrapeBusinessType("");
-        setClientOffer("");
-        setKnowledgeBase("");
-        setAttachedDocuments([]);
-        setMeetingMode(""); setMeetingLink(""); setMeetingAddress("");
-        setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
-        setMeetingLength("30"); setMeetingBuffer("15"); setBookingCapacity("20");
-        setPhoneNumbers([{ number: "", cap: 40 }]);
-        setCallingHoursStart("09:00"); setCallingHoursEnd("18:00");
-        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
-        setMaxCallAttempts("3"); setRetryGapDays("3"); setDailyCapPerNumber("40");
-        setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
-        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
-        setMaxCallLength("5"); setMaxLeadsPerRun("100");
-        setRemindSourceBooked(false);
-        setRemindSourceCalendar(false);
-        setRemindSourceUpload(true);
-        setReminderTimingValue("1");
-        setReminderTimingUnit("hours");
-      } else if (serviceId === "Lead Generation") {
+      } else {
         // No saved config yet — Lead Generation & Enrichment defaults. Data-only: no script/voice/meeting.
         setIcpDescription("");
         setIntentSignalDescription("");
@@ -1219,134 +1127,6 @@ Always handle objections politely.`;
         setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
         setMaxLeadsPerRun("100");
         setEnrichEnabled(true); setEnrichmentDepth("Standard Profile + Website");
-      } else if (onboardedClient?.id === "acc_Harbor") {
-        if (serviceId === "Outbound Sales / Appt Setting") {
-          setScriptVariant("appointment_setting");
-          setScriptText("You are a friendly outbound rep for Harbor Financial. Your only goal is to get a short portfolio & coverage review on the calendar — keep the pitch light, don't oversell. Confirm you're speaking with the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in.");
-          setOpeningLine("Hi, this is Harbor Financial — did I catch you at an okay moment?");
-          setSuccessMetric("A booked, qualified portfolio review on the calendar.");
-          setVoiceSelection("default");
-          setModelSelection("gpt-4o-mini");
-          setIcpDescription("Independent insurance brokers and small financial advisory firms in the US (5–50 staff) who handle their own client outreach and want more booked policy-review meetings.");
-          setIsUploadListChecked(true);
-          setIsScrapeChecked(true);
-          setScrapeCity("Austin");
-          setScrapeState("TX");
-          setScrapeRadius("25");
-          setScrapeBusinessType("Insurance brokers");
-          setClientOffer("A free 15-minute portfolio & coverage review with a licensed fiduciary advisor.");
-          setKnowledgeBase("Harbor Financial is a fee-only fiduciary advisory firm based in Austin, TX (founded 2014). Services: retirement planning, insurance, and wealth management. Known for transparent, commission-free advice. Typical client: business owners and professionals aged 35–60.");
-          setAttachedDocuments(["Harbor-Services-Overview.pdf", "FAQ-2026.docx"]);
-          setMeetingMode("Both");
-          setMeetingLink("https://meet.google.com/hbr-review-team");
-          setMeetingAddress("120 Congress Ave, Suite 400, Austin, TX 78701");
-          setAvailabilityWindows([
-            { day: "Monday", start: "09:00", end: "17:00" },
-            { day: "Wednesday", start: "10:00", end: "16:00" },
-            { day: "Friday", start: "09:00", end: "13:00" },
-          ]);
-          setMeetingLength("30");
-          setMeetingBuffer("15");
-          setBookingCapacity("20");
-          setPhoneNumbers([{ number: "+1 (512) 555-0142", cap: 40 }, { number: "+1 (512) 555-0188", cap: 40 }]);
-          setCallingHoursStart("09:00");
-          setCallingHoursEnd("18:00");
-          setCallingTimezone(onboardedClient?.timezone || "America/New_York");
-          setMaxCallAttempts("3");
-          setRetryGapDays("3");
-          setDailyCapPerNumber("40");
-          setEnrichEnabled(true);
-          setEnrichmentDepth("Deep (profile + website + email + ICP fit)");
-          setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
-          setMaxCallLength("5");
-          setMaxLeadsPerRun("100");
-        } else {
-          setScriptVariant("db_reactivation");
-          setScriptText("You are calling past or dormant leads on behalf of Harbor Financial who previously showed interest in our insurance policy reviews but went quiet. Warmly reference that they connected with us previously, check if their insurance needs are still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar for a coverage review.");
-          setOpeningLine("Hi, this is Harbor Financial — did I catch you at an okay moment?");
-          setSuccessMetric("A re-engaged meeting or renewal confirmed on the calendar.");
-          setVoiceSelection("default");
-          setModelSelection("gpt-4o-mini");
-          setIcpDescription("Past leads and dormant clients who showed interest in insurance advisory services in the US.");
-          setIsUploadListChecked(true);
-          setIsScrapeChecked(false);
-          setScrapeCity("");
-          setScrapeState("");
-          setScrapeRadius("10");
-          setScrapeBusinessType("");
-          setClientOffer("A free 15-minute portfolio & coverage review with a licensed fiduciary advisor.");
-          setKnowledgeBase("Harbor Financial is a fee-only fiduciary advisory firm based in Austin, TX (founded 2014). Services: retirement planning, insurance, and wealth management. Known for transparent, commission-free advice. Typical client: business owners and professionals aged 35–60.");
-          setAttachedDocuments(["Harbor-Services-Overview.pdf", "FAQ-2026.docx"]);
-          setMeetingMode("Both");
-          setMeetingLink("https://meet.google.com/hbr-review-team");
-          setMeetingAddress("120 Congress Ave, Suite 400, Austin, TX 78701");
-          setAvailabilityWindows([
-            { day: "Monday", start: "09:00", end: "17:00" },
-            { day: "Wednesday", start: "10:00", end: "16:00" },
-            { day: "Friday", start: "09:00", end: "13:00" },
-          ]);
-          setMeetingLength("30");
-          setMeetingBuffer("15");
-          setBookingCapacity("20");
-          setPhoneNumbers([{ number: "+1 (512) 555-0142", cap: 40 }, { number: "+1 (512) 555-0188", cap: 40 }]);
-          setCallingHoursStart("09:00");
-          setCallingHoursEnd("18:00");
-          setCallingTimezone(onboardedClient?.timezone || "America/New_York");
-          setMaxCallAttempts("3");
-          setRetryGapDays("3");
-          setDailyCapPerNumber("40");
-          setEnrichEnabled(true);
-          setEnrichmentDepth("Standard Profile + Website");
-          setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
-          setMaxCallLength("5");
-          setMaxLeadsPerRun("100");
-        }
-      } else {
-        if (serviceId === "Reactivation & Renewals") {
-          setScriptVariant("db_reactivation");
-          setScriptText("You are calling past or dormant leads on behalf of the business described in your context — people who showed interest before but went quiet. Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar. Be gracious if they've moved on.");
-          setOpeningLine("Hi, this is the team calling — did I catch you at an okay moment?");
-          setSuccessMetric("A re-engaged meeting or renewal confirmed on the calendar.");
-          setIcpDescription("");
-          setIsUploadListChecked(true);
-          setIsScrapeChecked(false);
-        } else {
-          setScriptVariant("default");
-          setScriptText("You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in.");
-          setOpeningLine("Hi, this is the team calling — did I catch you at an okay moment?");
-          setSuccessMetric("A booked, qualified meeting on the calendar.");
-          setIcpDescription("");
-          setIsUploadListChecked(true);
-          setIsScrapeChecked(false);
-        }
-        setVoiceSelection("default");
-        setModelSelection("gpt-4o-mini");
-        setScrapeCity("");
-        setScrapeState("");
-        setScrapeRadius("10");
-        setScrapeBusinessType("");
-        setClientOffer("");
-        setKnowledgeBase("");
-        setAttachedDocuments([]);
-        setMeetingMode("");
-        setMeetingLink("");
-        setMeetingAddress("");
-        setAvailabilityWindows([{ day: "Monday", start: "09:00", end: "17:00" }]);
-        setMeetingLength("30");
-        setMeetingBuffer("15");
-        setBookingCapacity("20");
-        setPhoneNumbers([{ number: "", cap: 40 }]);
-        setCallingHoursStart("09:00");
-        setCallingHoursEnd("18:00");
-        setCallingTimezone(onboardedClient?.timezone || "America/New_York");
-        setMaxCallAttempts("3");
-        setRetryGapDays("3");
-        setDailyCapPerNumber("40");
-        setEnrichEnabled(true);
-        setEnrichmentDepth("Standard Profile + Website");
-        setScrapeSources(["Google Maps", "Yellow Pages", "Hotfrog"]);
-        setMaxCallLength("5");
-        setMaxLeadsPerRun("100");
       }
     }
 
@@ -1358,11 +1138,6 @@ Always handle objections politely.`;
         if (!json.ok) return;
         const owned = json.numbers.filter((n) => ids.includes(n.id)).map((n) => n.number);
         if (!owned.length) return;
-        setPhoneNumbers((prev) => {
-          const have = new Set(prev.map((p) => p.number).filter(Boolean));
-          const add = owned.filter((n) => !have.has(n)).map((n) => ({ number: n, cap: 40 }));
-          return add.length ? [...prev.filter((p) => p.number.trim()), ...add] : prev;
-        });
         setInboundNumbers((prev) => {
           const have = new Set(prev.map((p) => p.number).filter(Boolean));
           const add = owned.filter((n) => !have.has(n)).map((n) => ({ number: n }));
@@ -4082,57 +3857,8 @@ Always handle objections politely.`;
               <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "380px", overflowY: "auto", paddingRight: "6px" }}>
                 {[
                   {
-                    id: "Outbound Sales / Appt Setting",
-                    title: "1. Outbound Sales / Appointment Setting",
-                    desc: "Outbound voice: Calls prospects, pitches value, and books calendar slots.",
-                    useCase: "Use Case: Cold outreach, SDR prospecting campaigns, and booking sales demos.",
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                        <line x1="16" y1="2" x2="16" y2="6" />
-                        <line x1="8" y1="2" x2="8" y2="6" />
-                        <line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    )
-                  },
-                  {
-                    id: "Reactivation & Renewals",
-                    title: "2. Database Reactivation & Renewals",
-                    desc: "Outbound voice: Calls your own dormant or expiring contacts to win them back.",
-                    useCase: "Use Case: Re-engaging old leads, contract renewals, and win-back offers.",
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                      </svg>
-                    )
-                  },
-                  {
-                    id: "Lead Qualification",
-                    title: "3. Lead Qualification & Surveys",
-                    desc: "Outbound voice: Calls fresh leads, asks qualifying Qs, and scores responses.",
-                    useCase: "Use Case: Pre-screening job applicants, market research, and lead scoring.",
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                        <polyline points="22 4 12 14.01 9 11.01" />
-                      </svg>
-                    )
-                  },
-                  {
-                    id: "Appointment Reminders",
-                    title: "4. Appointment Reminders & Recovery",
-                    desc: "Outbound voice: Calls bookings to confirm attendance or recover missed appointments.",
-                    useCase: "Use Case: Cutting no-shows, webinar reminders, and rebooking missed slots.",
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                      </svg>
-                    )
-                  },
-                  {
                     id: "AI Receptionist",
-                    title: "5. AI Receptionist (Inbound)",
+                    title: "1. AI Receptionist (Inbound)",
                     desc: "Inbound voice: Answers calls 24/7, schedules meetings, and answers FAQs.",
                     useCase: "Use Case: Front-desk coverage, after-hours answering, and FAQ deflection.",
                     icon: (
@@ -4143,7 +3869,7 @@ Always handle objections politely.`;
                   },
                   {
                     id: "Support / Complaint Line",
-                    title: "6. Support / Complaint Line",
+                    title: "2. Support / Complaint Line",
                     desc: "Inbound voice: Answers calls, logs customer ticket details without booking.",
                     useCase: "Use Case: Ticket intake, capturing client issues, and customer reassurance.",
                     icon: (
@@ -4155,24 +3881,13 @@ Always handle objections politely.`;
                   },
                   {
                     id: "Lead Generation",
-                    title: "7. Lead Generation & Enrichment",
+                    title: "3. Lead Generation & Enrichment",
                     desc: "Data only: Scrapes business contact databases, then researches each lead for context and buying intent.",
                     useCase: "Use Case: Building fresh, enriched target lists (Google Maps, Yellow Pages, Hotfrog) for outreach campaigns.",
                     icon: (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
-                    )
-                  },
-                  {
-                    id: "List Cleaning",
-                    title: "8. List Cleaning & DNC Scrubbing",
-                    desc: "Data only: Formats phone numbers, removes duplicates, scrubs DNC lists.",
-                    useCase: "Use Case: Deduplication, timezone tagging, and ensuring compliance on lead lists.",
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                       </svg>
                     )
                   }
@@ -4423,1506 +4138,7 @@ Always handle objections politely.`;
             )}
 
             {configuringService ? (
-              (configuringService === "Outbound Sales / Appt Setting" || configuringService === "Reactivation & Renewals" || configuringService === "Lead Qualification" || configuringService === "Appointment Reminders") ? (
-                /* Configuration Form — shared by Outbound Sales, Reactivation, Lead Qualification, and Appointment Reminders */
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
-                  
-                  {/* Section 3: Who it calls / Appointment Source & Timing */}
-                  {configuringService === "Appointment Reminders" ? (
-                    (() => {
-                      const hasBookingService = onboardedClient?.activeServices?.includes("Outbound Sales / Appt Setting") || onboardedClient?.activeServices?.includes("Reactivation & Renewals");
-                      const isConfigured = (remindSourceBooked || remindSourceCalendar || remindSourceUpload) && reminderTimingValue.trim() !== "";
-                      return (
-                        <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                            <div style={{ display: "flex", flexDirection: "column" }}>
-                              <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Appointment Source &amp; Reminder Timing</span>
-                              <span style={{ fontSize: "11px", color: "#8A90A0" }}>Choose where we fetch appointments and configure when the agent should call.</span>
-                            </div>
-                            {isConfigured ? (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                                Configured ✓
-                              </span>
-                            ) : (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
-                                Needs input
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Reminder Type choice */}
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Reminder Type</label>
-                            <div style={{ display: "flex", gap: "8px" }}>
-                              {[
-                                {
-                                  value: "confirmation",
-                                  label: "Confirmation",
-                                  desc: "Confirm upcoming meetings",
-                                  template: "You are calling to remind someone about an upcoming appointment for the business described in your context. Be friendly and clear. Confirm the date, time, and location. Ask if they can make it. If they need to reschedule, call check_availability and then book_appointment with the new time. If they can't make it, capture the reason with capture_fields. Always end with a clear next step."
-                                },
-                                {
-                                  value: "no_show_recovery",
-                                  label: "No-Show Recovery",
-                                  desc: "Rebook missed appointments",
-                                  template: "You are calling someone who missed a recent appointment with the business described in your context. Be warm and non-judgmental — things come up. Confirm you've reached the right person, let them know they were missed, and offer to find a new time. Call check_availability and book_appointment to rebook. If they no longer want to come, capture the reason with capture_fields."
-                                },
-                                {
-                                  value: "event_reminder",
-                                  label: "Event Reminder",
-                                  desc: "Remind event registrants",
-                                  template: "You are calling people registered for an upcoming event run by the business described in your context. Remind them of the event date, time, and location, and confirm whether they still plan to attend. Record their answer with capture_fields. If they can't make it, thank them and note it. Keep it brief and upbeat."
-                                }
-                              ].map((opt) => {
-                                const isSelected = scriptVariant === opt.value;
-                                return (
-                                  <div
-                                    key={opt.value}
-                                    onClick={() => {
-                                      setScriptVariant(opt.value);
-                                      setScriptText(opt.template);
-                                    }}
-                                    style={{
-                                      flex: 1,
-                                      padding: "10px 12px",
-                                      borderRadius: "8px",
-                                      cursor: "pointer",
-                                      border: isSelected ? "2px solid #4F46FF" : "1px solid #ECEEF2",
-                                      background: isSelected ? "#F4F5FF" : "#FFFFFF",
-                                      transition: "all 150ms ease"
-                                    }}
-                                  >
-                                    <div style={{ fontSize: "12px", fontWeight: 700, color: isSelected ? "#4F46FF" : "#1F2433" }}>{opt.label}</div>
-                                    <div style={{ fontSize: "10px", color: "#8A90A0", marginTop: "2px" }}>{opt.desc}</div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Appointment Sources Checkboxes */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Appointment Source (Select all that apply)</label>
-                            
-                            {/* Checkbox 1 */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasBookingService ? "#1F2433" : "#A0A6B4", cursor: hasBookingService ? "pointer" : "not-allowed" }}>
-                                <input
-                                  type="checkbox"
-                                  disabled={!hasBookingService}
-                                  checked={remindSourceBooked && hasBookingService}
-                                  onChange={(e) => setRemindSourceBooked(e.target.checked)}
-                                  style={{ accentColor: "#4F46FF", cursor: hasBookingService ? "pointer" : "not-allowed" }}
-                                />
-                                <span>Remind the meetings we book (auto)</span>
-                              </label>
-                              {!hasBookingService && (
-                                <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
-                                  Create an Outbound service first to auto-remind the meetings it books.
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Checkbox 2 */}
-                            <div>
-                              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={remindSourceCalendar}
-                                  onChange={(e) => setRemindSourceCalendar(e.target.checked)}
-                                  style={{ accentColor: "#4F46FF", cursor: "pointer" }}
-                                />
-                                <span>Connect a calendar (Google Calendar / Outlook Sync)</span>
-                              </label>
-                              <span style={{ fontSize: "11px", color: "#8A90A0", marginLeft: "22px", display: "block" }}>
-                                Syncs live with the client&apos;s calendar once connected.
-                              </span>
-                            </div>
-
-                            {/* Checkbox 3 */}
-                            <div>
-                              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={remindSourceUpload}
-                                  onChange={(e) => setRemindSourceUpload(e.target.checked)}
-                                  style={{ accentColor: "#4F46FF", cursor: "pointer" }}
-                                />
-                                <span>Upload an appointment list (CSV: name, phone, appointment time)</span>
-                              </label>
-                              <span style={{ fontSize: "11px", color: "#8A90A0", marginLeft: "22px", display: "block" }}>
-                                Provide scheduled appointments manually using the document zone below.
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Reminder Timing */}
-                          <div style={{ borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Reminder Timing</label>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <input
-                                type="number"
-                                min="1"
-                                value={reminderTimingValue}
-                                onChange={(e) => setReminderTimingValue(e.target.value)}
-                                style={{ width: "80px", padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                              />
-                              <select
-                                value={reminderTimingUnit}
-                                onChange={(e) => setReminderTimingUnit(e.target.value)}
-                                style={{ padding: "8px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none", background: "#FFFFFF", cursor: "pointer" }}
-                              >
-                                {scriptVariant === "no_show_recovery" ? (
-                                  <>
-                                    <option value="minutes">minutes</option>
-                                    <option value="hours">hours</option>
-                                  </>
-                                ) : (
-                                  <>
-                                    <option value="hours">hours</option>
-                                    <option value="days">days</option>
-                                  </>
-                                )}
-                              </select>
-                              <span style={{ fontSize: "12.5px", fontWeight: 500, color: "#1F2433", marginLeft: "4px" }}>
-                                {scriptVariant === "confirmation" && `before the appointment.`}
-                                {scriptVariant === "no_show_recovery" && `after a missed appointment.`}
-                                {scriptVariant === "event_reminder" && `before the event.`}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    (() => {
-                      const isConfigured = icpDescription.trim() !== "" && (isUploadListChecked || (isScrapeChecked && scrapeCity.trim() !== "" && scrapeState.trim() !== "" && scrapeBusinessType.trim() !== ""));
-                      return (
-                        <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                            <div style={{ display: "flex", flexDirection: "column" }}>
-                              <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>1. Who it calls (Leads &amp; Target ICP)</span>
-                              <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set targeting parameters for Lead Scraper or upload a custom CSV contact list.</span>
-                            </div>
-                            {isConfigured ? (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                                Configured ✓
-                              </span>
-                            ) : (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
-                                Needs input
-                              </span>
-                            )}
-                          </div>
-
-                          {/* ICP Description Textarea */}
-                          {(() => {
-                            const isBusiness = onboardedClient?.targetCustomerType === "business";
-                            return (
-                              <>
-                                <div>
-                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>
-                                    {isBusiness ? "Ideal Customer Profile (ICP) Description" : "Target Audience / Demographic Description"}
-                                  </label>
-                                  <textarea
-                                    placeholder={isBusiness ? "e.g. Dental clinics, roofers, HVAC companies in Austin, TX..." : "e.g. Past retail customers, homeowners who requested a roofing quote..."}
-                                    value={icpDescription}
-                                    onChange={(e) => setIcpDescription(e.target.value)}
-                                    style={{
-                                      width: "100%",
-                                      minHeight: "70px",
-                                      padding: "10px 12px",
-                                      border: "1px solid #ECEEF2",
-                                      borderRadius: "8px",
-                                      fontSize: "13px",
-                                      color: "#1F2433",
-                                      fontFamily: "inherit",
-                                      resize: "vertical",
-                                      outline: "none"
-                                    }}
-                                  />
-                                  <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>
-                                    {isBusiness 
-                                      ? "Search terms and scraping keywords will auto-generate from this text description." 
-                                      : "This helps the AI agent understand who it is calling and tailor its conversation style."
-                                    }
-                                  </p>
-                                </div>
-
-                                {/* Checkboxes for Lead Source */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Lead Acquisition Source</label>
-                                  
-                                  {isBusiness ? (
-                                    <>
-                                      {/* Checkbox 1: Upload a list */}
-                                      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}>
-                                        <input
-                                          type="checkbox"
-                                          disabled={configuringService === "Reactivation & Renewals"}
-                                          checked={isUploadListChecked || configuringService === "Reactivation & Renewals"}
-                                          onChange={(e) => setIsUploadListChecked(e.target.checked)}
-                                          style={{ accentColor: "#4F46FF", cursor: configuringService === "Reactivation & Renewals" ? "default" : "pointer" }}
-                                        />
-                                        <span>Upload a list (CSV file)</span>
-                                      </label>
-
-                                      {/* Checkbox 2: Scrape / find leads */}
-                                      {configuringService !== "Reactivation & Renewals" && (() => {
-                                        // Only an actually-created, active Lead Generation service unlocks scraping — not a mock display tag.
-                                        const hasLeadGen = onboardedClient?.activeServices?.includes("Lead Generation");
-                                        return (
-                                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: hasLeadGen ? "#1F2433" : "#A0A6B4", cursor: hasLeadGen ? "pointer" : "not-allowed" }}>
-                                              <input
-                                                type="checkbox"
-                                                disabled={!hasLeadGen}
-                                                checked={isScrapeChecked && hasLeadGen}
-                                                onChange={(e) => setIsScrapeChecked(e.target.checked)}
-                                                style={{ accentColor: "#4F46FF", cursor: hasLeadGen ? "pointer" : "not-allowed" }}
-                                              />
-                                              <span>Scrape / find leads</span>
-                                            </label>
-                                            {!hasLeadGen && (
-                                              <span style={{ fontSize: "11px", color: "#D97706", marginLeft: "22px" }}>
-                                                You need to create a Lead Generation service for this client first to start scraping.
-                                              </span>
-                                            )}
-                                          </div>
-                                        );
-                                      })()}
-                                    </>
-                                  ) : (
-                                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433" }}>
-                                      <input
-                                        type="checkbox"
-                                        checked
-                                        disabled
-                                        style={{ accentColor: "#4F46FF", cursor: "not-allowed" }}
-                                      />
-                                      <span style={{ color: "#5A6072" }}>Upload a list (Consumer B2C calls require uploading a custom contact list)</span>
-                                    </label>
-                                  )}
-                                </div>
-                              </>
-                            );
-                          })()}
-
-                          {isScrapeChecked && (onboardedClient?.activeServices?.includes("Lead Generation") || onboardedClient?.services?.includes("Lead Generation")) && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "14px" }}>
-                              <div>
-                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#1F2433", display: "block" }}>Where to search for leads</span>
-                                <span style={{ fontSize: "11px", color: "#8A90A0", display: "block", marginTop: "2px" }}>We search this area for matching businesses, e.g. within 25 km of Austin, TX.</span>
-                              </div>
-                              
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                                <div>
-                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>City</label>
-                                  <input
-                                    type="text"
-                                    placeholder="e.g. Austin"
-                                    value={scrapeCity}
-                                    onChange={(e) => setScrapeCity(e.target.value)}
-                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                  />
-                                </div>
-                                <div>
-                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>State</label>
-                                  <input
-                                    type="text"
-                                    placeholder="e.g. TX"
-                                    value={scrapeState}
-                                    onChange={(e) => setScrapeState(e.target.value)}
-                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                  />
-                                </div>
-                                <div>
-                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Radius (km)</label>
-                                  <input
-                                    type="number"
-                                    placeholder="e.g. 25"
-                                    value={scrapeRadius}
-                                    onChange={(e) => setScrapeRadius(e.target.value)}
-                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                  />
-                                </div>
-                                <div>
-                                  <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Business Type</label>
-                                  <input
-                                    type="text"
-                                    placeholder="e.g. Dental Clinic"
-                                    value={scrapeBusinessType}
-                                    onChange={(e) => setScrapeBusinessType(e.target.value)}
-                                    style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                        </div>
-                      );
-                    })()
-                  )}
-
-                  {/* Section: Qualifying Questions (Lead Qualification only) */}
-                  {configuringService === "Lead Qualification" && (() => {
-                    const QUALIFY_PROMPT = "You are calling to qualify prospects for the business described in your context. Ask the qualifying questions naturally, one at a time. Once you've gathered the answers, call capture_fields to save them along with whether the prospect is a good fit (qualified true or false). Be efficient and respectful of their time.";
-                    const SURVEY_PROMPT = "You are running a short survey on behalf of the business described in your context. Read the questions naturally, one at a time, without leading the respondent. Record each answer with capture_fields exactly as given. Stay neutral — you're gathering research, not selling. Thank them for their time at the end.";
-                    const RECRUIT_PROMPT = "You are screening job candidates for the business described in your context. Ask the screening questions one at a time and capture the answers with capture_fields, marking whether the candidate meets the basic criteria (qualified true or false). If they're a fit and interested, call check_availability and book_appointment to schedule an interview. Be respectful and encouraging.";
-                    const isSurvey = scriptVariant === "survey";
-                    const isConfigured = qualifyingQuestions.some(q => q.trim() !== "") && (isSurvey || qualifiedCriteria.trim() !== "");
-                    return (
-                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>2. Qualifying Questions</span>
-                          <span style={{ fontSize: "11px", fontWeight: 600, color: isConfigured ? "#22C55E" : "#D97706", background: isConfigured ? "#ECFDF5" : "#FFF7ED", padding: "2px 8px", borderRadius: "6px" }}>{isConfigured ? "Configured ✓" : "Needs input"}</span>
-                        </div>
-
-                        {/* Qualify vs Survey */}
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "8px", display: "block" }}>What is this run for?</label>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            {[
-                              { v: "default", label: "Qualify & score", hint: "Decide who's a fit" },
-                              { v: "survey", label: "Survey / Research", hint: "Just collect answers" },
-                            ].map((o) => {
-                              const sel = (o.v === "survey") === isSurvey;
-                              return (
-                                <div key={o.v}
-                                  onClick={() => {
-                                    if (o.v === "survey") { setScriptVariant("survey"); setRecruitmentEnabled(false); setScriptText(SURVEY_PROMPT); }
-                                    else { setScriptVariant("default"); setScriptText(recruitmentEnabled ? RECRUIT_PROMPT : QUALIFY_PROMPT); }
-                                  }}
-                                  style={{ flex: 1, padding: "10px 12px", borderRadius: "8px", cursor: "pointer", border: sel ? "2px solid #4F46FF" : "1px solid #ECEEF2", background: sel ? "#F4F5FF" : "#FFFFFF" }}>
-                                  <div style={{ fontSize: "12px", fontWeight: 600, color: sel ? "#4F46FF" : "#1F2433" }}>{o.label}</div>
-                                  <div style={{ fontSize: "10.5px", color: "#8A90A0", marginTop: "2px" }}>{o.hint}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* The questions */}
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Questions the agent asks</label>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                            {qualifyingQuestions.map((q, idx) => (
-                              <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                                <input
-                                  type="text"
-                                  placeholder={`Question ${idx + 1} — e.g. What's your budget?`}
-                                  value={q}
-                                  onChange={(e) => { const next = [...qualifyingQuestions]; next[idx] = e.target.value; setQualifyingQuestions(next); }}
-                                  style={{ flex: 1, padding: "8px 12px", fontSize: "12px", border: "1px solid #ECEEF2", borderRadius: "8px", outline: "none", color: "#1F2433", fontFamily: "inherit", background: "#FFFFFF" }}
-                                />
-                                {qualifyingQuestions.length > 1 && (
-                                  <button type="button" onClick={() => setQualifyingQuestions(qualifyingQuestions.filter((_, i) => i !== idx))} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: "8px", padding: "8px 10px", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}>&times;</button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                          <button type="button" onClick={() => setQualifyingQuestions([...qualifyingQuestions, ""])} style={{ marginTop: "8px", background: "#F4F5FF", color: "#4F46FF", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>+ Add question</button>
-                        </div>
-
-                        {/* Qualified criteria — only when scoring */}
-                        {!isSurvey && (
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>What counts as &quot;qualified&quot;?</label>
-                            <textarea
-                              placeholder="e.g. Budget over $5k, decision-maker, ready within 3 months"
-                              value={qualifiedCriteria}
-                              onChange={(e) => setQualifiedCriteria(e.target.value)}
-                              style={{ width: "100%", minHeight: "60px", padding: "10px 12px", fontSize: "12px", border: "1px solid #ECEEF2", borderRadius: "8px", outline: "none", color: "#1F2433", fontFamily: "inherit", background: "#FFFFFF", resize: "vertical" }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Recruitment toggle — only in Qualify mode */}
-                        {!isSurvey && (
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1F2433", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={recruitmentEnabled}
-                              onChange={(e) => { setRecruitmentEnabled(e.target.checked); setScriptText(e.target.checked ? RECRUIT_PROMPT : QUALIFY_PROMPT); }}
-                              style={{ accentColor: "#4F46FF" }}
-                            />
-                            <span><strong>Recruitment screening</strong> — book an interview for qualified leads <span style={{ color: "#8A90A0", fontWeight: 400 }}>(turns on the Meeting section below)</span></span>
-                          </label>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Section 4: Offer & Knowledge */}
-                  {(() => {
-                    const isNoOffer = configuringService === "Lead Qualification" || configuringService === "Appointment Reminders";
-                    const isConfigured = (isNoOffer || clientOffer.trim() !== "") && knowledgeBase.trim() !== "";
-                    const sectionTitle = isNoOffer 
-                      ? (configuringService === "Lead Qualification" ? "3. Knowledge Base" : "2. Knowledge Base")
-                      : "2. Offer & Knowledge Base";
-                    const sectionSubtitle = isNoOffer
-                      ? "Core info the agent uses to answer questions on the call."
-                      : "Detail the pitch proposal and core FAQ content that the agent will discuss.";
-                    return (
-                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{sectionTitle}</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>{sectionSubtitle}</span>
-                          </div>
-                          {isConfigured ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                              Configured ✓
-                            </span>
-                          ) : (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
-                              Needs input
-                            </span>
-                          )}
-                        </div>
-
-                        {!isNoOffer && (
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>The Core Offer / Pitch Hook</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Free 30-min dental cleaning with zero out-of-pocket costs"
-                            value={clientOffer}
-                            onChange={(e) => setClientOffer(e.target.value)}
-                            style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                          />
-                        </div>
-                        )}
-
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Knowledge Base (FAQs &amp; Business Info)</label>
-                          <textarea
-                            placeholder="e.g. Business hours are 8am-6pm. We accept major insurances. Dr. Smith has 15 years experience..."
-                            value={knowledgeBase}
-                            onChange={(e) => setKnowledgeBase(e.target.value)}
-                            style={{
-                              width: "100%",
-                              minHeight: "75px",
-                              padding: "10px 12px",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                              color: "#1F2433",
-                              fontFamily: "inherit",
-                              resize: "vertical",
-                              outline: "none"
-                            }}
-                          />
-                        </div>
-
-                        {/* File Upload Zone */}
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Attach Documents</label>
-                          <label style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            border: "2px dashed #ECEEF2",
-                            borderRadius: "10px",
-                            padding: "24px 16px",
-                            background: "#F9FAFB",
-                            cursor: "pointer",
-                            transition: "all 150ms ease"
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = "#4F46FF"}
-                          onMouseLeave={(e) => e.currentTarget.style.borderColor = "#ECEEF2"}
-                          >
-                            <input
-                              type="file"
-                              multiple
-                              style={{ display: "none" }}
-                              onChange={(e) => handleDocumentUpload(e.target.files)}
-                            />
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#A0A6B4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "8px" }}>
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="17 8 12 3 7 8" />
-                              <line x1="12" y1="3" x2="12" y2="15" />
-                            </svg>
-                            <span style={{ fontSize: "12px", fontWeight: 600, color: "#5A6072" }}>Drag a file or click to upload</span>
-                            <span style={{ fontSize: "10px", color: "#8A90A0", marginTop: "2px" }}>PDF, DOCX, TXT</span>
-                          </label>
-
-                          {attachedDocuments.length > 0 && (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
-                              {attachedDocuments.map((docName, docIdx) => (
-                                <div key={docIdx} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#F4F5FF", border: "1px solid #C7CBF5", borderRadius: "16px", padding: "4px 10px", fontSize: "11.5px", color: "#4F46FF", fontWeight: 500 }}>
-                                  <span>{docName}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setAttachedDocuments(attachedDocuments.filter((_, i) => i !== docIdx))}
-                                    style={{ background: "transparent", border: "none", color: "#EF4444", fontWeight: "bold", fontSize: "13px", cursor: "pointer", padding: 0 }}
-                                  >
-                                    &times;
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                      </div>
-                    );
-                  })()}
-
-                  {/* Section 5: The meeting — hidden for Lead Qualification unless recruitment screening is on */}
-                  {(configuringService !== "Lead Qualification" || recruitmentEnabled) && (() => {
-                    const isModeSelected = meetingMode !== "";
-                    const isLinkConfigured = (meetingMode === "Online" || meetingMode === "Both") ? meetingLink.trim() !== "" : true;
-                    const isAddressConfigured = (meetingMode === "In-person" || meetingMode === "Both") ? meetingAddress.trim() !== "" : true;
-                    const isConfigured = isModeSelected && isLinkConfigured && isAddressConfigured;
-                    return (
-                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>3. The Meeting (Calendar &amp; Booking)</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Set appointment modes, scheduling buffers, and calendar availability windows.</span>
-                          </div>
-                          {isConfigured ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                              Configured ✓
-                            </span>
-                          ) : (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
-                              Needs input
-                            </span>
-                          )}
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "8px", display: "block" }}>Meeting Mode (Required)</label>
-                          <div style={{ display: "flex", gap: "16px" }}>
-                            {["Online", "In-person", "Both"].map((mode) => {
-                              const isChecked = meetingMode === mode;
-                              return (
-                                <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 600, color: "#1F2433", cursor: "pointer" }}>
-                                  <input
-                                    type="radio"
-                                    name="meetingMode"
-                                    checked={isChecked}
-                                    onChange={() => setMeetingMode(mode)}
-                                    style={{
-                                      accentColor: "#4F46FF",
-                                      cursor: "pointer"
-                                    }}
-                                  />
-                                  {mode}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {(meetingMode === "Online" || meetingMode === "Both") && (
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Meeting Link (Google Meet / Zoom)</label>
-                            <input
-                              type="text"
-                              placeholder="https://meet.google.com/xyz"
-                              value={meetingLink}
-                              onChange={(e) => setMeetingLink(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                        )}
-
-                        {(meetingMode === "In-person" || meetingMode === "Both") && (
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>In-Person Meeting Address</label>
-                            <input
-                              type="text"
-                              placeholder="123 Business Rd, Suite 100"
-                              value={meetingAddress}
-                              onChange={(e) => setMeetingAddress(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                        )}
-
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Availability Windows</label>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                            {availabilityWindows.map((win, idx) => (
-                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <select
-                                  value={win.day}
-                                  onChange={(e) => {
-                                    const next = [...availabilityWindows];
-                                    next[idx].day = e.target.value;
-                                    setAvailabilityWindows(next);
-                                  }}
-                                  style={{ padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", background: "#FFFFFF", color: "#1F2433", outline: "none" }}
-                                >
-                                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => (
-                                    <option key={d} value={d}>{d}</option>
-                                  ))}
-                                </select>
-                                <input
-                                  type="time"
-                                  value={win.start}
-                                  onChange={(e) => {
-                                    const next = [...availabilityWindows];
-                                    next[idx].start = e.target.value;
-                                    setAvailabilityWindows(next);
-                                  }}
-                                  style={{ padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", color: "#1F2433", outline: "none" }}
-                                />
-                                <span style={{ fontSize: "12px", color: "#8A90A0" }}>to</span>
-                                <input
-                                  type="time"
-                                  value={win.end}
-                                  onChange={(e) => {
-                                    const next = [...availabilityWindows];
-                                    next[idx].end = e.target.value;
-                                    setAvailabilityWindows(next);
-                                  }}
-                                  style={{ padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", color: "#1F2433", outline: "none" }}
-                                />
-                                {availabilityWindows.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setAvailabilityWindows(availabilityWindows.filter((_, i) => i !== idx));
-                                    }}
-                                    style={{ background: "transparent", border: "none", color: "#EF4444", fontSize: "16px", cursor: "pointer", fontWeight: "bold" }}
-                                  >
-                                    &times;
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAvailabilityWindows([...availabilityWindows, { day: "Monday", start: "09:00", end: "17:00" }]);
-                              }}
-                              style={{
-                                width: "fit-content",
-                                background: "transparent",
-                                border: "1px dashed #4F46FF",
-                                color: "#4F46FF",
-                                borderRadius: "8px",
-                                padding: "6px 12px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                marginTop: "4px"
-                              }}
-                            >
-                              + Add Window
-                            </button>
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Meeting Length (min)</label>
-                            <input
-                              type="number"
-                              value={meetingLength}
-                              onChange={(e) => setMeetingLength(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Buffer Between (min)</label>
-                            <input
-                              type="number"
-                              value={meetingBuffer}
-                              onChange={(e) => setMeetingBuffer(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Booking Capacity</label>
-                            <input
-                              type="number"
-                              value={bookingCapacity}
-                              onChange={(e) => setBookingCapacity(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                        </div>
-
-                      </div>
-                    );
-                  })()}
-
-                  {/* Section 6: Phone pool & Caller IDs */}
-                  {(() => {
-                    const isConfigured = phoneNumbers.some(p => p.number.trim() !== "");
-                    return (
-                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>4. Phone Pool &amp; Calling Window</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Manage rotating caller IDs to scale daily dials safely and comply with call times.</span>
-                          </div>
-                          {isConfigured ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                              Configured ✓
-                            </span>
-                          ) : (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#D97706", background: "#FEF3C7", padding: "4px 10px", borderRadius: "20px" }}>
-                              Needs input
-                            </span>
-                          )}
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Phone Number Pool (Caller IDs)</label>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                            {phoneNumbers.map((p, idx) => (
-                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <input
-                                  type="text"
-                                  placeholder="+1 (555) 123-4567"
-                                  value={p.number}
-                                  onChange={(e) => {
-                                    const next = [...phoneNumbers];
-                                    next[idx].number = e.target.value;
-                                    setPhoneNumbers(next);
-                                  }}
-                                  style={{ flex: 1, padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                                />
-                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                  <span style={{ fontSize: "11px", color: "#8A90A0" }}>Daily Cap:</span>
-                                  <input
-                                    type="number"
-                                    value={p.cap}
-                                    onChange={(e) => {
-                                      const next = [...phoneNumbers];
-                                      next[idx].cap = parseInt(e.target.value) || 0;
-                                      setPhoneNumbers(next);
-                                    }}
-                                    style={{ width: "60px", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "12px", color: "#1F2433", outline: "none" }}
-                                  />
-                                </div>
-                                {phoneNumbers.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPhoneNumbers(phoneNumbers.filter((_, i) => i !== idx));
-                                    }}
-                                    style={{ background: "transparent", border: "none", color: "#EF4444", fontSize: "16px", cursor: "pointer", fontWeight: "bold" }}
-                                  >
-                                    &times;
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPhoneNumbers([...phoneNumbers, { number: "", cap: 40 }]);
-                                }}
-                                style={{
-                                  width: "fit-content",
-                                  background: "transparent",
-                                  border: "1px dashed #4F46FF",
-                                  color: "#4F46FF",
-                                  borderRadius: "8px",
-                                  padding: "6px 12px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  cursor: "pointer"
-                                }}
-                              >
-                                + Add manually
-                              </button>
-                              <BuyPhoneNumberButton
-                                accountId={onboardedClient?.id}
-                                onBought={(n) => { setPhoneNumbers(prev => [...prev.filter(p => p.number.trim()), { number: n.number, cap: 40 }]); recordBoughtNumberOnAccount(n.id); }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Live computed capacity indicator */}
-                        {(() => {
-                          const validCount = phoneNumbers.filter(p => p.number.trim() !== "").length;
-                          const totalCap = phoneNumbers.reduce((acc, curr) => acc + (curr.number.trim() !== "" ? curr.cap : 0), 0);
-                          return (
-                            <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#065F46", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                              </svg>
-                              <span>
-                                {validCount} numbers &times; 40 = {totalCap} dials/day capacity.
-                              </span>
-                            </div>
-                          );
-                        })()}
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginTop: "4px" }}>
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Calling Starts</label>
-                            <input
-                              type="time"
-                              value={callingHoursStart}
-                              onChange={(e) => setCallingHoursStart(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                          <div>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Calling Ends</label>
-                            <input
-                              type="time"
-                              value={callingHoursEnd}
-                              onChange={(e) => setCallingHoursEnd(e.target.value)}
-                              style={{ width: "100%", padding: "10px 12px", border: "1px solid #ECEEF2", borderRadius: "8px", fontSize: "13px", color: "#1F2433", outline: "none" }}
-                            />
-                          </div>
-                          
-                          {/* Calling timezone custom dropdown */}
-                          <div style={{ position: "relative" }}>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "4px", display: "block" }}>Timezone</label>
-                            <div
-                              onClick={() => setIsTimezoneDropdownOpen(!isTimezoneDropdownOpen)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyLeft: "space-between",
-                                padding: "10px 12px",
-                                border: isTimezoneDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                fontSize: "13px",
-                                color: "#1F2433",
-                                background: "#FFFFFF",
-                                transition: "all 150ms ease",
-                                display: "flex",
-                                justifyContent: "space-between"
-                              }}
-                            >
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callingTimezone}</span>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isTimezoneDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
-                                <path d="m6 9 6 6 6-6" />
-                              </svg>
-                            </div>
-                            {isTimezoneDropdownOpen && (
-                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px", maxHeight: "150px", overflowY: "auto" }}>
-                                {["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Phoenix", "Europe/London", "Asia/Kolkata"].map((z) => (
-                                  <div
-                                    key={z}
-                                    onClick={() => {
-                                      setCallingTimezone(z);
-                                      setIsTimezoneDropdownOpen(false);
-                                    }}
-                                    style={{
-                                      padding: "8px 10px",
-                                      fontSize: "12px",
-                                      borderRadius: "6px",
-                                      cursor: "pointer",
-                                      color: callingTimezone === z ? "#4F46FF" : "#5A6072",
-                                      background: callingTimezone === z ? "#F4F5FF" : "transparent",
-                                      fontWeight: callingTimezone === z ? 600 : 500
-                                    }}
-                                    onMouseEnter={(e) => { if (callingTimezone !== z) e.currentTarget.style.background = "#F7F8FA"; }}
-                                    onMouseLeave={(e) => { if (callingTimezone !== z) e.currentTarget.style.background = "transparent"; }}
-                                  >
-                                    {z}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-                    );
-                  })()}
-
-                  {/* Section 1: Agent & Script (Moved to the bottom!) */}
-                  {(() => {
-                    const isConfigured = true; // Always true for Section 1 as all fields have defaults
-                    return (
-                      <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>5. Agent &amp; Script</span>
-                            <span style={{ fontSize: "11px", color: "#8A90A0" }}>Define the AI calling script variant, instructions, and voice preferences.</span>
-                          </div>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11.5px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "4px 10px", borderRadius: "20px" }}>
-                            Configured ✓
-                          </span>
-                        </div>
-
-                        {/* Dropdown for Script Variant — hidden for Lead Qualification and Appointment Reminders (chosen in respective sections) */}
-                        <div ref={variantRef} style={{ position: "relative", display: (configuringService === "Lead Qualification" || configuringService === "Appointment Reminders") ? "none" : "block" }}>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Script Variant (Preset Selection)</label>
-                          <div
-                            onClick={() => setIsVariantDropdownOpen(!isVariantDropdownOpen)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "8px 10px",
-                              border: isVariantDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                              fontSize: "12px",
-                              color: "#1F2433",
-                              background: "#FFFFFF",
-                              transition: "all 150ms ease",
-                              maxWidth: "320px"
-                            }}
-                          >
-                            <span>
-                              {configuringService === "Reactivation & Renewals" ? (
-                                (scriptVariant === "db_reactivation" || scriptVariant === "default") ? "Re-engage old leads → book (Default)" : "Expiring contracts → save/renew"
-                              ) : (
-                                scriptVariant === "default" ? "Cold-call → book demo (Default)" : "Lighter pitch → just fill calendar"
-                              )}
-                            </span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVariantDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
-                              <path d="m6 9 6 6 6-6" />
-                            </svg>
-                          </div>
-                          {isVariantDropdownOpen && (
-                            <div style={{ position: "absolute", top: "100%", left: 0, marginTop: "4px", width: "320px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                              {(configuringService === "Reactivation & Renewals" ? [
-                                { value: "db_reactivation", label: "Re-engage old leads → book (Default)", prompt: "You are calling past or dormant leads on behalf of the business described in your context — people who showed interest before but went quiet. Warmly reference that they connected with us previously, check if their need is still live, and re-spark interest. If they're open, call check_availability and book_appointment to get them back on the calendar. Be gracious if they've moved on." },
-                                { value: "renewals_winback", label: "Expiring contracts → save/renew", prompt: "You are calling customers of the business described in your context whose contract or subscription is expiring or recently lapsed. Your goal is to save the account — confirm their status, surface the value they'd lose, and handle hesitation calmly. If they want to continue, call check_availability and book_appointment to set up the renewal conversation. Never pressure; make staying easy." }
-                              ] : [
-                                { value: "default", label: "Cold-call → book demo (Default)", prompt: "You are a warm, sharp, persuasive (never pushy) outbound sales rep calling on behalf of the business described in your context. Your goal is to book a short meeting or demo. Ask one question at a time and keep it natural. Qualify lightly and handle objections politely. When they agree, call check_availability, offer the times, then book_appointment to lock it in." },
-                                { value: "appointment_setting", label: "Lighter pitch → just fill calendar", prompt: "You are a friendly outbound rep for the business described in your context. Your only goal is to get a meeting on the calendar — keep the pitch light, don't oversell. Confirm you're speaking with the right person, give a one-line reason for the call, then move straight to scheduling: call check_availability, offer a couple of times, and book_appointment to lock it in." }
-                              ]).map((item) => (
-                                <div
-                                  key={item.value}
-                                  onClick={() => {
-                                    setScriptVariant(item.value);
-                                    setScriptText(item.prompt);
-                                    setIsVariantDropdownOpen(false);
-                                  }}
-                                  style={{
-                                    padding: "8px 10px",
-                                    fontSize: "12px",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    color: scriptVariant === item.value ? "#4F46FF" : "#5A6072",
-                                    background: scriptVariant === item.value ? "#F4F5FF" : "transparent",
-                                    fontWeight: scriptVariant === item.value ? 600 : 500
-                                  }}
-                                  onMouseEnter={(e) => { if (scriptVariant !== item.value) e.currentTarget.style.background = "#F7F8FA"; }}
-                                  onMouseLeave={(e) => { if (scriptVariant !== item.value) e.currentTarget.style.background = "transparent"; }}
-                                >
-                                  {item.label}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* System script prompt */}
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072" }}>Agent Instructions / Script Prompt</label>
-                            <button
-                              type="button"
-                              onClick={handleGenerateScript}
-                              style={{
-                                background: "#F4F5FF",
-                                color: "#4F46FF",
-                                border: "1px solid #C7CBF5",
-                                borderRadius: "6px",
-                                padding: "4px 10px",
-                                fontSize: "11.5px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px"
-                              }}
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
-                              >
-                                <path d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z" />
-                              </svg>
-                              Generate script
-                            </button>
-                          </div>
-                          <textarea
-                            value={scriptText}
-                            onChange={(e) => setScriptText(e.target.value)}
-                            style={{
-                              width: "100%",
-                              minHeight: "100px",
-                              padding: "10px 12px",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                              color: "#1F2433",
-                              fontFamily: "inherit",
-                              resize: "vertical",
-                              outline: "none"
-                            }}
-                          />
-                          <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0, marginTop: "4px" }}>Auto-generated from your config — edit freely.</p>
-                        </div>
-
-                        {/* Opening Line */}
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Opening Line (First Message)</label>
-                          <input
-                            type="text"
-                            value={openingLine}
-                            onChange={(e) => setOpeningLine(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "10px 12px",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                              color: "#1F2433",
-                              outline: "none"
-                            }}
-                          />
-                        </div>
-
-                        {/* Success Metric */}
-                        <div>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Success Metric</label>
-                          <input
-                            type="text"
-                            value={successMetric}
-                            onChange={(e) => setSuccessMetric(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "10px 12px",
-                              border: "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                              color: "#1F2433",
-                              outline: "none"
-                            }}
-                          />
-                        </div>
-
-                        {/* Voice & Model dropdowns */}
-                        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
-                          {/* Voice select */}
-                          <div ref={voiceRef} style={{ flex: 1, position: "relative" }}>
-                            <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>Voice Profile</label>
-                            <div
-                              onClick={() => setIsVoiceDropdownOpen(!isVoiceDropdownOpen)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                padding: "10px 12px",
-                                border: isVoiceDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                fontSize: "13px",
-                                color: "#1F2433",
-                                background: "#FFFFFF",
-                                transition: "all 150ms ease"
-                              }}
-                            >
-                              <span>{voiceSelection === "default" ? "Elliot (VAPI default)" : `${voiceSelection} (VAPI)`}</span>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoiceDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease", flexShrink: 0 }}>
-                                <path d="m6 9 6 6 6-6" />
-                              </svg>
-                            </div>
-                            {isVoiceDropdownOpen && (
-                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px", maxHeight: "260px", overflowY: "auto" }}>
-                                {VAPI_VOICES.map((name) => (
-                                  <div
-                                    key={name}
-                                    onClick={() => {
-                                      setVoiceSelection(name === "Elliot" ? "default" : name);
-                                      setIsVoiceDropdownOpen(false);
-                                    }}
-                                    style={{
-                                      padding: "8px 10px",
-                                      fontSize: "12px",
-                                      borderRadius: "6px",
-                                      cursor: "pointer",
-                                      color: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? "#4F46FF" : "#5A6072",
-                                      background: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? "#F4F5FF" : "transparent",
-                                      fontWeight: (voiceSelection === "default" ? "Elliot" : voiceSelection) === name ? 600 : 500
-                                    }}
-                                    onMouseEnter={(e) => { if (voiceSelection !== name) e.currentTarget.style.background = "#F7F8FA"; }}
-                                    onMouseLeave={(e) => { if (voiceSelection !== name) e.currentTarget.style.background = "transparent"; }}
-                                  >
-                                    {name}{name === "Elliot" ? " (default)" : ""}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Model dropdown */}
-                        <div ref={modelRef} style={{ position: "relative", maxWidth: "320px" }}>
-                          <label style={{ fontSize: "11px", fontWeight: 600, color: "#5A6072", marginBottom: "6px", display: "block" }}>AI Model</label>
-                          <div
-                            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "10px 12px",
-                              border: isModelDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                              fontSize: "13px",
-                              color: "#1F2433",
-                              background: "#FFFFFF",
-                              transition: "all 150ms ease"
-                            }}
-                          >
-                            <span>{VAPI_MODELS.find(m => m.key === modelSelection)?.label ?? modelSelection}</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isModelDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
-                              <path d="m6 9 6 6 6-6" />
-                            </svg>
-                          </div>
-                          {isModelDropdownOpen && (
-                            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                              {VAPI_MODELS.map((item) => (
-                                <div
-                                  key={item.key}
-                                  onClick={() => {
-                                    setModelSelection(item.key);
-                                    setIsModelDropdownOpen(false);
-                                  }}
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    gap: "8px",
-                                    padding: "8px 10px",
-                                    fontSize: "12px",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    color: modelSelection === item.key ? "#4F46FF" : "#5A6072",
-                                    background: modelSelection === item.key ? "#F4F5FF" : "transparent",
-                                    fontWeight: modelSelection === item.key ? 600 : 500
-                                  }}
-                                  onMouseEnter={(e) => { if (modelSelection !== item.key) e.currentTarget.style.background = "#F7F8FA"; }}
-                                  onMouseLeave={(e) => { if (modelSelection !== item.key) e.currentTarget.style.background = "transparent"; }}
-                                >
-                                  <span>{item.label}</span>
-                                  <span style={{ fontSize: "10px", color: item.tier === "Cheap" ? "#10B981" : "#D97706", fontWeight: 600 }}>{item.tier}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Live cost estimate — from VAPI's published rates, not a live price feed */}
-                        {(() => {
-                          const { perMin, perCall } = estimateCallCost(modelSelection);
-                          return (
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#5A6072" }}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
-                              <span>~${perMin.toFixed(3)}/connected minute · ~${perCall.toFixed(2)}/call at 3 min <span style={{ color: "#A0A6B4" }}>(estimate, not a live price)</span></span>
-                            </div>
-                          );
-                        })()}
-
-                      </div>
-                    );
-                  })()}
-
-                  {/* Surfaced Auto-Config Section 1: Retry & pacing */}
-                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isRetryPacingCollapsed ? "0" : "14px" }}>
-                    <div
-                      onClick={() => setIsRetryPacingCollapsed(!isRetryPacingCollapsed)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isRetryPacingCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Retry &amp; Pacing</span>
-                      </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                        Configured ✓
-                      </span>
-                    </div>
-                    {!isRetryPacingCollapsed && (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                        <div>
-                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Call Attempts</label>
-                          <input type="number" value={maxCallAttempts} onChange={(e) => setMaxCallAttempts(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
-                        </div>
-                        <div>
-                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Retry Gap (Days)</label>
-                          <input type="number" value={retryGapDays} onChange={(e) => setRetryGapDays(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
-                        </div>
-                        <div>
-                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Daily Cap Per Number</label>
-                          <input type="number" value={dailyCapPerNumber} onChange={(e) => setDailyCapPerNumber(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Surfaced Auto-Config Section 2: Voicemail */}
-                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isVoicemailCollapsed ? "0" : "14px" }}>
-                    <div
-                      onClick={() => setIsVoicemailCollapsed(!isVoicemailCollapsed)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isVoicemailCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Voicemail Handling</span>
-                      </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                        Configured ✓
-                      </span>
-                    </div>
-                    {!isVoicemailCollapsed && (
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px", color: "#5A6072" }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "1px" }}>
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
-                        <span>
-                          <strong style={{ color: "#1F2433" }}>No voicemail is ever left.</strong> If a call reaches an answering machine, the agent hangs up immediately — you&apos;re never charged for talking to a machine. The call is marked unanswered and retried later.
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Surfaced Auto-Config Section 3: Compliance */}
-                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isComplianceCollapsed ? "0" : "14px" }}>
-                    <div
-                      onClick={() => setIsComplianceCollapsed(!isComplianceCollapsed)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isComplianceCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Compliance &amp; Calling Window</span>
-                      </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                        Configured ✓
-                      </span>
-                    </div>
-                    {!isComplianceCollapsed && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                        <p style={{ margin: 0, fontSize: "11px", color: "#8A90A0" }}>These stay on for every calling agent — legal/safety, not editable.</p>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
-                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
-                          DNC Scrub (opt-out list) <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
-                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
-                          Opt-out keyword detection (TCPA) <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
-                          <input type="checkbox" checked disabled style={{ accentColor: "#4F46FF" }} />
-                          Respect lead timezone call windows <span style={{ color: "#8A90A0", fontWeight: 500 }}>(always on)</span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Surfaced Auto-Config Section 4: Enrichment */}
-                  {configuringService !== "Appointment Reminders" && (
-                    <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isEnrichmentCollapsed ? "0" : "14px" }}>
-                      <div
-                        onClick={() => setIsEnrichmentCollapsed(!isEnrichmentCollapsed)}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isEnrichmentCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
-                          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Lead Enrichment Settings</span>
-                        </div>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                          Configured ✓
-                        </span>
-                      </div>
-                      {!isEnrichmentCollapsed && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                          {onboardedClient?.targetCustomerType !== "business" ? (
-                            <span style={{ fontSize: "12px", color: "#D97706" }}>Enrichment is only for B2B clients — this client sells to consumers, so leads aren&apos;t researched or enriched.</span>
-                          ) : (<>
-                          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, color: "#1F2433" }}>
-                            <input type="checkbox" checked={enrichEnabled} onChange={(e) => setEnrichEnabled(e.target.checked)} style={{ accentColor: "#4F46FF" }} />
-                            Enrich each lead before dialing
-                          </label>
-                          {enrichEnabled && (
-                            <div ref={depthRef} style={{ position: "relative" }}>
-                              <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Enrichment Depth</label>
-                              <div
-                                onClick={() => setIsDepthDropdownOpen(!isDepthDropdownOpen)}
-                                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: isDepthDropdownOpen ? "1px solid #4F46FF" : "1px solid #ECEEF2", borderRadius: "6px", cursor: "pointer", fontSize: "12px", color: "#1F2433", background: "#FFFFFF", transition: "all 150ms ease" }}
-                              >
-                                <span>{enrichmentDepth}</span>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isDepthDropdownOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease" }}>
-                                  <path d="m6 9 6 6 6-6" />
-                                </svg>
-                              </div>
-                              {isDepthDropdownOpen && (
-                                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "8px", boxShadow: "0 8px 24px rgba(31,36,51,0.08)", zIndex: 100, padding: "6px" }}>
-                                  {["Basic (name + phone)", "Standard Profile + Website", "Deep (profile + website + email + ICP fit)"].map((opt) => (
-                                    <div
-                                      key={opt}
-                                      onClick={() => { setEnrichmentDepth(opt); setIsDepthDropdownOpen(false); }}
-                                      style={{ padding: "8px 10px", fontSize: "12px", borderRadius: "6px", cursor: "pointer", color: enrichmentDepth === opt ? "#4F46FF" : "#5A6072", background: enrichmentDepth === opt ? "#F4F5FF" : "transparent", fontWeight: enrichmentDepth === opt ? 600 : 500 }}
-                                      onMouseEnter={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "#F7F8FA"; }}
-                                      onMouseLeave={(e) => { if (enrichmentDepth !== opt) e.currentTarget.style.background = "transparent"; }}
-                                    >
-                                      {opt}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          </>)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Surfaced Auto-Config Section 5: Scrape Sources */}
-                  {configuringService !== "Appointment Reminders" && (
-                    <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isScrapeSourcesCollapsed ? "0" : "14px" }}>
-                      <div
-                        onClick={() => setIsScrapeSourcesCollapsed(!isScrapeSourcesCollapsed)}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isScrapeSourcesCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
-                          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Scraper Sources</span>
-                        </div>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                          Configured ✓
-                        </span>
-                      </div>
-                      {!isScrapeSourcesCollapsed && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block" }}>Scraping search engines enabled <span style={{ color: "#8A90A0", fontWeight: 500 }}>(click to toggle)</span></label>
-                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            {["Google Maps", "Yellow Pages", "Hotfrog"].map((s) => {
-                              const on = scrapeSources.includes(s);
-                              return (
-                                <span
-                                  key={s}
-                                  onClick={() => setScrapeSources(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
-                                  style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", background: on ? "#F4F5FF" : "#F4F5F7", border: on ? "1px solid #C7CBF5" : "1px solid #ECEEF2", color: on ? "#4F46FF" : "#A0A6B4", fontSize: "11px", fontWeight: 600, cursor: "pointer", userSelect: "none" }}
-                                >
-                                  {on ? "✓ " : ""}{s}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Surfaced Auto-Config Section 6: Call Limits */}
-                  <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: isCallLimitsCollapsed ? "0" : "14px" }}>
-                    <div
-                      onClick={() => setIsCallLimitsCollapsed(!isCallLimitsCollapsed)}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A90A0" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCallLimitsCollapsed ? "rotate(0deg)" : "rotate(90deg)", transition: "transform 200ms ease" }}>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#1F2433" }}>Calling Limits &amp; Batching</span>
-                      </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 600, color: "#22C55E", background: "#ECFDF5", padding: "2px 8px", borderRadius: "6px" }}>
-                        Configured ✓
-                      </span>
-                    </div>
-                    {!isCallLimitsCollapsed && (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", borderTop: "1px solid #ECEEF2", paddingTop: "12px", fontSize: "12px" }}>
-                        <div>
-                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Call Length (Min)</label>
-                          <input type="number" value={maxCallLength} onChange={(e) => setMaxCallLength(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
-                        </div>
-                        <div>
-                          <label style={{ fontWeight: 600, color: "#5A6072", display: "block", marginBottom: "4px" }}>Max Leads Per Scraper Run</label>
-                          <input type="number" value={maxLeadsPerRun} onChange={(e) => setMaxLeadsPerRun(e.target.value)} style={{ width: "100%", padding: "8px", border: "1px solid #ECEEF2", borderRadius: "6px", background: "#FFFFFF", fontFamily: "inherit" }} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {serviceApiError && (
-                    <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#B91C1C" }}>
-                      {serviceApiError}
-                    </div>
-                  )}
-
-                  {/* Section 7: Footer actions */}
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px", borderTop: "1px solid #ECEEF2", paddingTop: "16px" }}>
-                    <button
-                      type="button"
-                      onClick={() => setConfiguringService(null)}
-                      style={{
-                        background: "#F4F5FF",
-                        color: "#4F46FF",
-                        border: "none",
-                        borderRadius: "10px",
-                        padding: "10px 20px",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                        transition: "all 150ms ease"
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "#EBEFFD"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "#F4F5FF"}
-                    >
-                      Cancel
-                    </button>
-                    {(() => {
-                      // Lead Qualification (capture-only) and Appointment Reminders don't need a meeting.
-                      const canActivate = ((configuringService === "Lead Qualification" && !recruitmentEnabled) || configuringService === "Appointment Reminders" || !!meetingMode) && !isSavingService;
-                      return (
-                    <button
-                      type="button"
-                      disabled={!canActivate}
-                      onClick={handleActivateService}
-                      style={{
-                        background: canActivate ? "#22C55E" : "#CBD2DD",
-                        color: "#FFFFFF",
-                        border: "none",
-                        borderRadius: "10px",
-                        padding: "10px 20px",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        cursor: canActivate ? "pointer" : "not-allowed",
-                        fontFamily: "inherit",
-                        transition: "background 150ms ease"
-                      }}
-                      onMouseEnter={(e) => { if (canActivate) e.currentTarget.style.background = "#16A34A"; }}
-                      onMouseLeave={(e) => { if (canActivate) e.currentTarget.style.background = "#22C55E"; }}
-                    >
-                      {isSavingService ? "Saving..." : (onboardedClient?.services?.includes(configuringService) ? "Save Updates" : "Activate Service")}
-                    </button>
-                      );
-                    })()}
-                  </div>
-
-                </div>
-              ) : (configuringService === "AI Receptionist" || configuringService === "Support / Complaint Line") ? (
+              (configuringService === "AI Receptionist" || configuringService === "Support / Complaint Line") ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "10px" }}>
                   {/* Inbound Form — shared by AI Receptionist and Support / Complaint Line */}
                   
@@ -6413,14 +4629,28 @@ Always handle objections politely.`;
                     );
                   })()}
 
-                  {/* Section 6: Agent & Script */}
+                  {/* Section 6: No-Show Reduction — paid add-on, AI Receptionist only (needs a booking to attach consent to) */}
+                  {configuringService === "AI Receptionist" && (
+                    <div style={{ background: "#FFFFFF", border: remindersAddonEnabled ? "1px solid #C7CBF5" : "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+                        <input type="checkbox" checked={remindersAddonEnabled} onChange={(e) => setRemindersAddonEnabled(e.target.checked)} style={{ accentColor: "#4F46FF", width: "16px", height: "16px" }} />
+                        <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>6. No-Show Reduction</span>
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#4F46FF", background: "#F4F5FF", padding: "2px 8px", borderRadius: "20px" }}>Paid add-on</span>
+                      </label>
+                      <p style={{ fontSize: "11px", color: "#8A90A0", margin: 0 }}>
+                        When on, after booking the agent asks the caller for permission to call back an hour before their meeting as a reminder — offering to reschedule if they can&apos;t make it. Only fires for callers who actually say yes; consent is captured per-booking, and carries forward automatically if they reschedule.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Section 7: Agent & Script */}
                   {(() => {
                     const isConfigured = scriptText.trim() !== "" && openingLine.trim() !== "" && successMetric.trim() !== "";
                     return (
                       <div style={{ background: "#FFFFFF", border: "1px solid #ECEEF2", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifySelf: "space-between", borderBottom: "1px solid #ECEEF2", paddingBottom: "12px", marginBottom: "4px" }}>
                           <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{configuringService === "AI Receptionist" ? "6. Agent &amp; Script" : "5. Agent &amp; Script"}</span>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: "#1F2433" }}>{configuringService === "AI Receptionist" ? "7. Agent &amp; Script" : "5. Agent &amp; Script"}</span>
                             <span style={{ fontSize: "11px", color: "#8A90A0" }}>Define the AI calling script variant, instructions, and voice preferences.</span>
                           </div>
                           {isConfigured ? (
@@ -6834,7 +5064,9 @@ Always handle objections politely.`;
                   </div>
                 </div>
               ) : (
-                /* Centered Coming Soon Placeholder for List Cleaning (the one remaining unbuilt service) */
+                /* Defensive fallback only — every card in the picker above (3 services) has its own
+                   branch. Can't actually be reached, but a dead configuringService value shouldn't
+                   render a blank screen either. */
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px", border: "1px solid #ECEEF2", borderRadius: "12px", background: "#FFFFFF", textAlign: "center", marginTop: "10px" }}>
                   <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -6846,7 +5078,7 @@ Always handle objections politely.`;
                     </svg>
                   </div>
                   <h4 style={{ fontSize: "16px", fontWeight: 600, color: "#1F2433", margin: 0 }}>Configuration for {configuringService}</h4>
-                  <p style={{ fontSize: "13px", color: "#8A90A0", margin: "8px 0 20px" }}>This configuration module is coming soon.</p>
+                  <p style={{ fontSize: "13px", color: "#8A90A0", margin: "8px 0 20px" }}>This service isn't recognized.</p>
                   <button
                     type="button"
                     onClick={() => setConfiguringService(null)}
@@ -7002,80 +5234,7 @@ Always handle objections politely.`;
                             </div>
 
                             {/* Summary Detail items */}
-                            {(svcId === "Outbound Sales / Appt Setting" || svcId === "Reactivation & Renewals") && config ? (
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>AI Model / Voice</span>
-                                  <span style={{ color: "#1F2433" }}>{config.modelSelection} / {config.voiceSelection === "default" ? "Elliot (VAPI default)" : `${config.voiceSelection} (VAPI)`}</span>
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Phone Pool &amp; Capacity</span>
-                                  <span style={{ color: "#1F2433" }}>
-                                    {config.phoneNumbers?.length || 0} numbers configured ({ (config.phoneNumbers || []).reduce((acc, curr) => acc + curr.cap, 0) } dials/day)
-                                  </span>
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Meeting Mode</span>
-                                  <span style={{ color: "#1F2433" }}>
-                                    {config.meetingMode} {config.meetingMode === "Online" || config.meetingMode === "Both" ? `(${config.meetingLink || "No link"})` : ""}
-                                  </span>
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Target Offer</span>
-                                  <span style={{ color: "#1F2433", fontStyle: "italic" }}>&quot;{config.clientOffer || "No offer set"}&quot;</span>
-                                </div>
-                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
-                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    {config.scriptText}
-                                  </span>
-                                </div>
-                              </div>
-                            ) : (svcId === "Lead Qualification" && config) ? (
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Mode</span>
-                                  <span style={{ color: "#1F2433" }}>{config.scriptVariant === "survey" ? "Survey / Research" : "Qualify & score"}{config.recruitmentEnabled ? " + Recruitment (books interview)" : ""}</span>
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Questions</span>
-                                  <span style={{ color: "#1F2433" }}>{(config.qualifyingQuestions || []).filter(q => q && q.trim()).length} configured</span>
-                                </div>
-                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
-                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.scriptText}</span>
-                                </div>
-                              </div>
-                            ) : (svcId === "Appointment Reminders" && config) ? (
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Reminder Type</span>
-                                  <span style={{ color: "#1F2433", textTransform: "capitalize" }}>
-                                    {String(config.scriptVariant || "").replace(/_/g, " ")}
-                                  </span>
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Reminder Timing</span>
-                                  <span style={{ color: "#1F2433" }}>
-                                    {config.reminderTimingValue} {config.reminderTimingUnit} {config.scriptVariant === "no_show_recovery" ? "after" : "before"}
-                                  </span>
-                                </div>
-                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Appointment Source(s)</span>
-                                  <span style={{ color: "#1F2433" }}>
-                                    {[
-                                      config.remindSourceBooked && "Remind meetings we book",
-                                      config.remindSourceCalendar && "Connected calendar",
-                                      config.remindSourceUpload && "CSV upload"
-                                    ].filter(Boolean).join(", ") || "None"}
-                                  </span>
-                                </div>
-                                <div style={{ gridColumn: "span 2", display: "flex", flexDirection: "column", gap: "4px", background: "#F7F8FA", padding: "10px", borderRadius: "8px", border: "1px solid #ECEEF2" }}>
-                                  <span style={{ fontWeight: 600, color: "#5A6072" }}>Instructions Script Preview</span>
-                                  <span style={{ color: "#5A6072", fontFamily: "monospace", fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.scriptText}</span>
-                                </div>
-                              </div>
-                            ) : (svcId === "AI Receptionist" || svcId === "Support / Complaint Line") && config ? (
+                            {(svcId === "AI Receptionist" || svcId === "Support / Complaint Line") && config ? (
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "12px" }}>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                   <span style={{ fontWeight: 600, color: "#5A6072" }}>Coverage Mode</span>
@@ -7100,6 +5259,14 @@ Always handle objections politely.`;
                                     <span style={{ fontWeight: 600, color: "#5A6072" }}>Meeting Mode</span>
                                     <span style={{ color: "#1F2433" }}>
                                       {config.meetingMode ? `${config.meetingMode} (${config.meetingMode === "Online" || config.meetingMode === "Both" ? (config.meetingLink || "No link") : ""} ${config.meetingMode === "In-person" || config.meetingMode === "Both" ? (config.meetingAddress || "No address") : ""})` : "Not configured"}
+                                    </span>
+                                  </div>
+                                )}
+                                {svcId === "AI Receptionist" && (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <span style={{ fontWeight: 600, color: "#5A6072" }}>No-Show Reduction (add-on)</span>
+                                    <span style={{ color: config.remindersAddonEnabled ? "#22C55E" : "#8A90A0", fontWeight: config.remindersAddonEnabled ? 600 : 400 }}>
+                                      {config.remindersAddonEnabled ? "Active — bill for this" : "Not purchased"}
                                     </span>
                                   </div>
                                 )}
